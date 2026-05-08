@@ -28,11 +28,11 @@ class ImageScraperPro:
         self.db_path = db_path
         self._init_database()
         
-        # Quality thresholds
-        self.min_width = 800
-        self.min_height = 600
-        self.min_file_size = 50 * 1024  # 50KB
-        self.max_file_size = 10 * 1024 * 1024  # 10MB
+        # Quality thresholds (read from environment variables)
+        self.min_width = int(os.getenv('MIN_IMAGE_WIDTH', '100') or '100')
+        self.min_height = int(os.getenv('MIN_IMAGE_HEIGHT', '100') or '100')
+        self.min_file_size = int(os.getenv('MIN_IMAGE_SIZE_KB', '1') or '1') * 1024
+        self.max_file_size = int(os.getenv('MAX_IMAGE_SIZE_MB', '50') or '50') * 1024 * 1024
         
         # Duplicate detection
         self.posted_urls: Set[str] = self._load_posted_urls()

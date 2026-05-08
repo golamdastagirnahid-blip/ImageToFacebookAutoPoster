@@ -1,6 +1,6 @@
 # 🤖 Auto-Poster Status
 
-_Last updated: 2026-05-08 08:34:26 UTC_
+_Last updated: 2026-05-08 08:53:05 UTC_
 
 ## 🟢 **HEALTHY**
 
@@ -8,12 +8,12 @@ _Last updated: 2026-05-08 08:34:26 UTC_
 
 ## 📊 Statistics
 
-- **Total runs tracked:** 2
-- **Successes:** 2 (100.0%)
+- **Total runs tracked:** 3
+- **Successes:** 3 (100.0%)
 - **Failures:** 0
 - **Skipped:** 0
 - **Consecutive failures:** 0
-- **Posts in last 24h:** 2
+- **Posts in last 24h:** 3
 
 ## 🔐 Facebook Token
 
@@ -21,21 +21,23 @@ _Last updated: 2026-05-08 08:34:26 UTC_
 
 ## ✅ Last Successful Post
 
-- **Time:** 2026-05-08T08:34:26.974811Z
-- **Title:** Unveiling the Carte des royaumes de Siam
-- **Source:** David Rumsey Map Collection
-- **Image size:** 1536x950
-- **Post ID:** 1104960692700888_122094858795317603
+- **Time:** 2026-05-08T08:53:05.348581Z
+- **Title:** Discover the Secrets of the Gotha Missal
+- **Source:** Cleveland Museum of Art
+- **Image size:** 7700x5500
+- **Post ID:** 1104960692700888_122094869691317603
 - **AI model:** unknown
 
 ## 📚 Source Distribution
 
-- **David Rumsey Map Collection:** 2 posts (100.0%)
+- **David Rumsey Map Collection:** 2 posts (66.7%)
+- **Cleveland Museum of Art:** 1 posts (33.3%)
 
 ## 📜 Recent Runs (last 10)
 
 | Time | Status | Source | Title |
 |------|--------|--------|-------|
+| 2026-05-08 08:53:05 | ✅ | Cleveland Museum of  | Discover the Secrets of the Gotha Missal |
 | 2026-05-08 08:34:26 | ✅ | David Rumsey Map Col | Unveiling the Carte des royaumes de Siam |
 | 2026-05-08 08:27:28 | ✅ | David Rumsey Map Col | Uncovering the Shell Map of Iowa |
 

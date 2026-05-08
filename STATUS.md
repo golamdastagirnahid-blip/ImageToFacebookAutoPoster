@@ -1,6 +1,6 @@
 # 🤖 Auto-Poster Status
 
-_Last updated: 2026-05-08 17:57:30 UTC_
+_Last updated: 2026-05-08 20:17:06 UTC_
 
 ## 🟢 **HEALTHY**
 
@@ -8,12 +8,12 @@ _Last updated: 2026-05-08 17:57:30 UTC_
 
 ## 📊 Statistics
 
-- **Total runs tracked:** 7
-- **Successes:** 7 (100.0%)
+- **Total runs tracked:** 8
+- **Successes:** 8 (100.0%)
 - **Failures:** 0
 - **Skipped:** 0
 - **Consecutive failures:** 0
-- **Posts in last 24h:** 7
+- **Posts in last 24h:** 8
 
 ## 🔐 Facebook Token
 
@@ -21,22 +21,24 @@ _Last updated: 2026-05-08 17:57:30 UTC_
 
 ## ✅ Last Successful Post
 
-- **Time:** 2026-05-08T17:57:30.619272Z
-- **Title:** Unveiling Jacques-Louis David's "Cupid and Psyche
-- **Source:** Cleveland Museum of Art
-- **Image size:** 5905x4400
-- **Post ID:** 1104960692700888_122095160571317603
+- **Time:** 2026-05-08T20:17:06.006219Z
+- **Title:** Unveiling the Hidden Gems of the Columbia River
+- **Source:** Metropolitan Museum of Art
+- **Image size:** 3655x2807
+- **Post ID:** 1104960692700888_122095231581317603
 - **AI model:** unknown
 
 ## 📚 Source Distribution
 
-- **David Rumsey Map Collection:** 4 posts (57.1%)
-- **Cleveland Museum of Art:** 3 posts (42.9%)
+- **David Rumsey Map Collection:** 4 posts (50.0%)
+- **Cleveland Museum of Art:** 3 posts (37.5%)
+- **Metropolitan Museum of Art:** 1 posts (12.5%)
 
 ## 📜 Recent Runs (last 10)
 
 | Time | Status | Source | Title |
 |------|--------|--------|-------|
+| 2026-05-08 20:17:06 | ✅ | Metropolitan Museum  | Unveiling the Hidden Gems of the Columbi |
 | 2026-05-08 17:57:30 | ✅ | Cleveland Museum of  | Unveiling Jacques-Louis David's "Cupid a |
 | 2026-05-08 15:03:28 | ✅ | David Rumsey Map Col | Discover the Hidden Secrets of Ancient R |
 | 2026-05-08 12:01:41 | ✅ | Cleveland Museum of  | Discover the Gotha Missal's Hidden Secre |

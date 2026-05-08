@@ -125,18 +125,16 @@ class ImageAutomation:
         caption = self.generate_caption(images[0], ai_content)
         print(f"\nCaption preview:\n{caption[:200]}...")
         
-        # Post to Facebook
+        # Post to Facebook (use single image for reliability)
         print("\nPosting to Facebook...")
-        if len(downloaded_paths) == 1:
-            result = self.facebook.post_image(downloaded_paths[0], caption)
-        else:
-            result = self.facebook.post_multiple_images(downloaded_paths, caption)
+        # Post first image with caption (most reliable approach)
+        result = self.facebook.post_image(downloaded_paths[0], caption)
         
         if 'error' not in result:
             print("✅ Post successful!")
             # Mark as posted in database if using pro scraper
             if self.is_pro:
-                self.scraper.mark_as_posted(posted_urls)
+                self.scraper.mark_as_posted(posted_urls[:1])
         else:
             print("❌ Post failed!")
         

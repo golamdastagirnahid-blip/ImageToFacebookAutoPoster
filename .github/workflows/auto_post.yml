@@ -42,7 +42,6 @@ jobs:
           ARCHIVE_SOURCES: ${{ secrets.ARCHIVE_SOURCES }}
           MIN_POST_INTERVAL_HOURS: ${{ secrets.MIN_POST_INTERVAL_HOURS }}
           MAX_POST_INTERVAL_HOURS: ${{ secrets.MAX_POST_INTERVAL_HOURS }}
-          MAX_IMAGES_PER_POST: ${{ secrets.MAX_IMAGES_PER_POST }}
           CREDIT_TEXT: ${{ secrets.CREDIT_TEXT }}
           DISCLAIMER_TEXT: ${{ secrets.DISCLAIMER_TEXT }}
           GITHUB_ACTIONS: "true"
@@ -50,6 +49,7 @@ jobs:
           MIN_IMAGE_HEIGHT: "100"
           MIN_IMAGE_SIZE_KB: "1"
           MAX_IMAGE_SIZE_MB: "50"
+          MAX_IMAGES_PER_POST: "1"
         run: |
           cd src
           python automation.py

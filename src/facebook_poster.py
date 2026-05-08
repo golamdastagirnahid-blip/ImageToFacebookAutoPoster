@@ -66,11 +66,14 @@ class FacebookPoster:
             
             # Create the post with uploaded images
             post_url = f"{self.base_url}/{self.page_id}/feed"
+            import json
             data = {
                 'message': caption,
                 'access_token': self.access_token,
-                'attached_media': [{'media_fbid': img_id} for img_id in uploaded_ids]
             }
+            # attached_media must be passed as individual JSON-encoded fields
+            for i, img_id in enumerate(uploaded_ids):
+                data[f'attached_media[{i}]'] = json.dumps({'media_fbid': img_id})
             
             response = requests.post(post_url, data=data, timeout=30)
             response.raise_for_status()

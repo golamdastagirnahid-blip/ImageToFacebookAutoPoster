@@ -24,15 +24,15 @@ class ImageAutomation:
         self.facebook = FacebookPoster()
         
         # Configuration
-        self.min_interval = int(os.getenv('MIN_POST_INTERVAL_HOURS', '4'))
-        self.max_interval = int(os.getenv('MAX_POST_INTERVAL_HOURS', '12'))
-        self.max_images_per_post = int(os.getenv('MAX_IMAGES_PER_POST', '3'))
-        self.sources = os.getenv('ARCHIVE_SOURCES', '').split(',')
-        self.credit_template = os.getenv('CREDIT_TEXT', 'Image Source: {source}')
-        self.disclaimer_template = os.getenv('DISCLAIMER_TEXT', 'Disclaimer: This image is used for commercial purposes under public domain or Creative Commons license.')
+        self.min_interval = int(os.getenv('MIN_POST_INTERVAL_HOURS', '4') or '4')
+        self.max_interval = int(os.getenv('MAX_POST_INTERVAL_HOURS', '12') or '12')
+        self.max_images_per_post = int(os.getenv('MAX_IMAGES_PER_POST', '3') or '3')
+        self.sources = [s.strip() for s in os.getenv('ARCHIVE_SOURCES', '').split(',') if s.strip()]
+        self.credit_template = os.getenv('CREDIT_TEXT', 'Image Source: {source}') or 'Image Source: {source}'
+        self.disclaimer_template = os.getenv('DISCLAIMER_TEXT', 'Disclaimer: This image is used for commercial purposes under public domain or Creative Commons license.') or 'Disclaimer: This image is used for commercial purposes under public domain or Creative Commons license.'
         
         # Pro scraper settings
-        self.max_pages_per_source = int(os.getenv('MAX_PAGES_PER_SOURCE', '5'))
+        self.max_pages_per_source = int(os.getenv('MAX_PAGES_PER_SOURCE', '5') or '5')
         self.is_pro = use_pro and os.getenv('USE_PRO_SCRAPER', 'true').lower() == 'true'
         
     def generate_caption(self, image_info: dict, ai_content: dict) -> str:

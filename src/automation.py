@@ -127,8 +127,9 @@ class ImageAutomation:
         
         # Post to Facebook (use single image for reliability)
         print("\nPosting to Facebook...")
-        # Post first image with caption (most reliable approach)
-        result = self.facebook.post_image(downloaded_paths[0], caption)
+        # Post first image with caption (most reliable approach - URL first, file fallback)
+        first_image_url = images[0].get('url')
+        result = self.facebook.post_image(downloaded_paths[0], caption, image_url=first_image_url)
         
         if 'error' not in result:
             print("✅ Post successful!")

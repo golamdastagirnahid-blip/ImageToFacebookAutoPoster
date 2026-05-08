@@ -15,30 +15,49 @@ class FacebookPoster:
         if not self.access_token or not self.page_id:
             raise ValueError("FACEBOOK_ACCESS_TOKEN and FACEBOOK_PAGE_ID must be set")
     
-    def post_image(self, image_path: str, caption: str) -> Dict:
-        """Post a single image to Facebook"""
+    def post_image(self, image_path: str, caption: str, image_url: str = None) -> Dict:
+        """Post a single image to Facebook. Tries URL upload first, falls back to file upload."""
+        upload_url = f"{self.base_url}/{self.page_id}/photos"
+        
+        # Try posting via URL first (more reliable for Facebook)
+        if image_url:
+            try:
+                data = {
+                    'url': image_url,
+                    'caption': caption,
+                    'access_token': self.access_token,
+                    'published': 'true'
+                }
+                response = requests.post(upload_url, data=data, timeout=60)
+                response.raise_for_status()
+                result = response.json()
+                print(f"Successfully posted image via URL. Post ID: {result.get('id')}")
+                return result
+            except Exception as e:
+                print(f"URL upload failed, trying file upload: {e}")
+                if hasattr(e, 'response') and e.response is not None:
+                    print(f"Response: {e.response.text}")
+        
+        # Fallback: file upload
         try:
-            # First, upload the image
-            upload_url = f"{self.base_url}/{self.page_id}/photos"
-            
             with open(image_path, 'rb') as image_file:
                 files = {'source': image_file}
                 data = {
                     'caption': caption,
                     'access_token': self.access_token,
-                    'published': True
+                    'published': 'true'
                 }
                 
                 response = requests.post(upload_url, files=files, data=data, timeout=60)
                 response.raise_for_status()
                 
                 result = response.json()
-                print(f"Successfully posted image. Post ID: {result.get('id')}")
+                print(f"Successfully posted image via file. Post ID: {result.get('id')}")
                 return result
                 
         except Exception as e:
             print(f"Error posting to Facebook: {e}")
-            if hasattr(e, 'response') and e.response:
+            if hasattr(e, 'response') and e.response is not None:
                 print(f"Response: {e.response.text}")
             return {'error': str(e)}
     

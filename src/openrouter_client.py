@@ -56,6 +56,8 @@ TITLE: [short title]"""
             
         except Exception as e:
             print(f"Error generating description: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                print(f"OpenRouter response: {e.response.text}")
             return {
                 'description': 'Beautiful image from public domain archives.',
                 'hashtags': '#publicdomain #art #history #culture',

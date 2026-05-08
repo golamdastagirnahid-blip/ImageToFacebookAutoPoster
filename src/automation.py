@@ -39,6 +39,8 @@ class ImageAutomation:
             enable_watermark=os.getenv('ENABLE_WATERMARK', 'true').lower() == 'true',
             watermark_text=os.getenv('WATERMARK_TEXT', 'Public Domain Archives'),
             enable_enhance=os.getenv('ENABLE_ENHANCE', 'true').lower() == 'true',
+            enable_headline_card=os.getenv('ENABLE_HEADLINE_CARD', 'true').lower() == 'true',
+            brand_name=os.getenv('BRAND_NAME', 'Vintage Archives'),
         )
         
         # NSFW & content safety
@@ -407,12 +409,29 @@ class ImageAutomation:
         caption = self.generate_caption(images[0], ai_content)
         print(f"\nCaption preview:\n{caption[:200]}...")
         
-        # Post-process the image for Facebook (resize, watermark, enhance, optimize)
+        # Post-process the image for Facebook
         print("\n🎨 Post-processing image for Facebook...")
         try:
             source_credit = images[0].get('source', 'Public Domain Archives')
             self.processor.watermark_text = source_credit
-            processed_path = self.processor.process(downloaded_paths[0], source_name=source_credit)
+            
+            if self.processor.enable_headline_card and ai_content.get('headline'):
+                # Magazine-style poster with yellow-highlighted headline
+                headline = ai_content.get('headline', '')
+                subheadline = ai_content.get('subheadline', '')
+                print(f"   Headline: {headline}")
+                if subheadline:
+                    print(f"   Sub: {subheadline}")
+                processed_path = self.processor.create_headline_card(
+                    image_path=downloaded_paths[0],
+                    headline=headline,
+                    subheadline=subheadline,
+                    source_name=source_credit,
+                )
+            else:
+                processed_path = self.processor.process(
+                    downloaded_paths[0], source_name=source_credit
+                )
             downloaded_paths[0] = processed_path
         except Exception as e:
             print(f"   Processing failed (using original): {e}")

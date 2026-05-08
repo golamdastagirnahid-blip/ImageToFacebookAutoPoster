@@ -86,18 +86,36 @@ class OpenRouterClient:
     def generate_description(self, image_context: str) -> Dict[str, str]:
         """Generate image description and hashtags - try Groq first, then OpenRouter"""
         
-        prompt = f"""You are a PROFESSIONAL museum curator, historian, and Facebook social media editor.
-Your job is to write a detailed, engaging, and professional Facebook post about a historical image.
+        prompt = f"""You are a VIRAL VINTAGE/HISTORY Facebook page editor.
+Your page niche: Vintage photography, historical moments, classic art, lost civilizations, retro nostalgia.
+Your audience: History buffs, nostalgia lovers, art enthusiasts who scroll fast and want IMPACTFUL hooks.
 
-Your audience is history enthusiasts who WANT to learn deeply about what they're seeing.
-Be thorough, educational, and captivating - like a museum placard meets a great storyteller.
+Your job is to create:
+1. A SHORT punchy HEADLINE (for the image overlay - like a magazine cover)
+2. A SUB-HEADLINE (small detail that adds context)
+3. A detailed TITLE for the Facebook post
+4. A rich DESCRIPTION that tells the full story
+5. Strategic HASHTAGS
 
-FULL IMAGE METADATA (from archive.org):
+FULL IMAGE METADATA:
 {image_context}
 
-Write a Facebook post with this EXACT structure (use these exact labels):
+Write the post with this EXACT structure (use these exact labels):
 
-TITLE: [A powerful, specific hook - max 100 characters. No clickbait. Pull the most compelling detail from the metadata.]
+HEADLINE: [A punchy 6-12 word hook for image overlay. Examples of good style:
+"Lost photo reveals 1920s Paris underground"
+"This 1890 map predicted modern Tokyo"
+"The forgotten queen who ruled three nations"
+Make it dramatic but factual. Pull the most compelling angle from the metadata.
+Keep under 70 characters. Use present tense for impact.]
+
+SUBHEADLINE: [A short 4-10 word secondary line. Add the time/place/key detail.
+Examples:
+"A snapshot from 1923 Berlin"
+"Painted decades before discovery"
+"125 years before the moon landing"]
+
+TITLE: [A powerful FB post hook - max 100 chars. Different from headline - more curiosity-driven.]
 
 DESCRIPTION: [Write a DETAILED, professional narrative of 8-14 sentences organized in paragraphs:
 
@@ -209,26 +227,41 @@ Rules:
     def _parse_response(self, content: str) -> Dict[str, str]:
         """Parse the AI response, supporting multi-line DESCRIPTION"""
         import re
-        result = {'description': '', 'hashtags': '', 'title': ''}
+        result = {'description': '', 'hashtags': '', 'title': '',
+                  'headline': '', 'subheadline': ''}
         
-        # Extract each section using regex that captures until next label or end
-        title_match = re.search(r'TITLE:\s*(.+?)(?=\n\s*(?:DESCRIPTION:|HASHTAGS:)|\Z)', content, re.DOTALL | re.IGNORECASE)
-        desc_match = re.search(r'DESCRIPTION:\s*(.+?)(?=\n\s*(?:HASHTAGS:|TITLE:)|\Z)', content, re.DOTALL | re.IGNORECASE)
-        tags_match = re.search(r'HASHTAGS:\s*(.+?)(?=\n\s*(?:TITLE:|DESCRIPTION:)|\Z)', content, re.DOTALL | re.IGNORECASE)
+        # Boundary pattern for all known sections
+        boundary = r'(?=\n\s*(?:HEADLINE:|SUBHEADLINE:|SUB-HEADLINE:|TITLE:|DESCRIPTION:|HASHTAGS:)|\Z)'
         
+        headline_match = re.search(r'HEADLINE:\s*(.+?)' + boundary, content, re.DOTALL | re.IGNORECASE)
+        sub_match = re.search(r'(?:SUBHEADLINE|SUB-HEADLINE):\s*(.+?)' + boundary, content, re.DOTALL | re.IGNORECASE)
+        title_match = re.search(r'TITLE:\s*(.+?)' + boundary, content, re.DOTALL | re.IGNORECASE)
+        desc_match = re.search(r'DESCRIPTION:\s*(.+?)' + boundary, content, re.DOTALL | re.IGNORECASE)
+        tags_match = re.search(r'HASHTAGS:\s*(.+?)' + boundary, content, re.DOTALL | re.IGNORECASE)
+        
+        def clean(text: str) -> str:
+            return text.strip().strip('[]').strip().strip('"').strip()
+        
+        if headline_match:
+            result['headline'] = clean(headline_match.group(1))[:120]
+        if sub_match:
+            result['subheadline'] = clean(sub_match.group(1))[:80]
         if title_match:
-            result['title'] = title_match.group(1).strip().strip('[]"').strip()
+            result['title'] = clean(title_match.group(1))
         if desc_match:
-            result['description'] = desc_match.group(1).strip().strip('[]').strip()
+            result['description'] = clean(desc_match.group(1))
         if tags_match:
-            tags = tags_match.group(1).strip().strip('[]').strip()
-            # Ensure hashtags have # prefix and are space-separated
+            tags = clean(tags_match.group(1))
             tag_list = [t.strip() for t in re.split(r'[,\n]', tags) if t.strip()]
             tag_list = [t if t.startswith('#') else '#' + t.replace(' ', '') for t in tag_list]
             result['hashtags'] = ' '.join(tag_list)
         
-        # Fallback if parsing failed
+        # Fallbacks
         if not result['description']:
             result['description'] = content.strip()
+        if not result['headline'] and result['title']:
+            result['headline'] = result['title'][:70]
+        if not result['title'] and result['headline']:
+            result['title'] = result['headline']
         
         return result

@@ -112,6 +112,11 @@ jobs:
           MAX_PAGES_PER_SOURCE: "1"
           NSFW_STRICT_MODE: "true"
           BLOCK_ON_MEDIUM_RISK: "true"
+          # Headline card style (magazine poster with yellow-highlighted headline)
+          ENABLE_HEADLINE_CARD: "true"
+          BRAND_NAME: ${{ secrets.BRAND_NAME || 'Vintage Archives' }}
+          ENABLE_WATERMARK: "true"
+          ENABLE_ENHANCE: "true"
         run: |
           cd src
           python automation.py

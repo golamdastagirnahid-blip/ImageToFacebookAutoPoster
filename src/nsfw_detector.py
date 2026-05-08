@@ -189,7 +189,10 @@ class StrictNSFWDetector:
         
         # Layer 3: Image Analysis (if local path available)
         if image_info.get('local_path'):
-            image_check = self._analyze_image(image_info['local_path'])
+            # Pass art context flag from text analysis
+            is_art = (results.get('checks', {}).get('text', {}).get('context') ==
+                      'art_whitelist_applied') or self._detect_art_context(image_info)
+            image_check = self._analyze_image(image_info['local_path'], is_art_context=is_art)
             results['checks']['image'] = image_check
             
             if image_check['blocked']:
@@ -354,8 +357,22 @@ class StrictNSFWDetector:
             'total_severity': 0
         }
     
-    def _analyze_image(self, image_path: str) -> Dict:
-        """Analyze image for NSFW content using multiple techniques"""
+    def _detect_art_context(self, image_info: Dict) -> bool:
+        """Quick check: is this image from an art/historical archive?"""
+        text = ' '.join(str(image_info.get(k, '')) for k in
+                        ['title', 'alt_text', 'description', 'creator', 'subject',
+                         'source', 'parent_link', 'url'])
+        text_lower = text.lower()
+        art_terms = ['archive.org', 'metropolitan museum', 'cleveland', 'rumsey',
+                     'public domain', 'museum', 'painting', 'sculpture', 'gallery',
+                     'classical', 'renaissance', 'baroque', 'medieval', 'antique',
+                     'historical', 'manuscript', 'lithograph', 'engraving', 'etching']
+        return any(term in text_lower for term in art_terms)
+    
+    def _analyze_image(self, image_path: str, is_art_context: bool = False) -> Dict:
+        """Analyze image for NSFW content using multiple techniques.
+        For art/historical context, only flags extreme cases (paintings/portraits
+        normally have high skin ratios from faces/hands and varied aspect ratios)."""
         try:
             img = Image.open(image_path)
             
@@ -363,45 +380,53 @@ class StrictNSFWDetector:
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             
+            width, height = img.size
+            
+            # Skip pixel analysis on tiny images (< 200px) - too unreliable
+            if width < 200 or height < 200:
+                return {
+                    'level': NSFWLevel.SAFE.value,
+                    'blocked': False,
+                    'risk_score': 0,
+                    'skip_reason': 'image_too_small_for_analysis'
+                }
+            
             # Technique 1: Skin detection
             skin_ratio = self._detect_skin_ratio(img)
-            
-            # Technique 2: Aspect ratio analysis
-            width, height = img.size
             aspect_ratio = width / height
-            
-            # Technique 3: Color distribution
             color_distribution = self._analyze_color_distribution(img)
-            
-            # Technique 4: Brightness/contrast analysis
             brightness, contrast = self._analyze_brightness_contrast(img)
             
-            # Combine all analyses
             risk_score = 0
             reasons = []
             
-            # Skin ratio check
-            if skin_ratio > 0.3:  # More than 30% skin
-                risk_score += 30
-                reasons.append(f"High skin ratio: {skin_ratio:.2%}")
-            elif skin_ratio > 0.2:
-                risk_score += 15
-                reasons.append(f"Moderate skin ratio: {skin_ratio:.2%}")
-            
-            # Aspect ratio check (portrait images more likely to be portraits)
-            if 0.5 < aspect_ratio < 0.8:
-                risk_score += 10
-                reasons.append(f"Suspicious aspect ratio: {aspect_ratio:.2f}")
-            
-            # Color distribution (warm colors more common in NSFW)
-            if color_distribution['warm_ratio'] > 0.6:
-                risk_score += 10
-                reasons.append(f"High warm color ratio: {color_distribution['warm_ratio']:.2%}")
-            
-            # Brightness/contrast
-            if contrast > 0.7:
-                risk_score += 5
-                reasons.append(f"High contrast: {contrast:.2f}")
+            # ART CONTEXT: Use much higher thresholds
+            if is_art_context:
+                # Only flag extreme skin ratios in art (paintings have lots of skin from faces/bodies)
+                if skin_ratio > 0.6:
+                    risk_score += 25
+                    reasons.append(f"Very high skin ratio in art: {skin_ratio:.2%}")
+                # Skip aspect/color/contrast checks entirely - meaningless for art
+            else:
+                # Standard strict checks for non-art content
+                if skin_ratio > 0.3:
+                    risk_score += 30
+                    reasons.append(f"High skin ratio: {skin_ratio:.2%}")
+                elif skin_ratio > 0.2:
+                    risk_score += 15
+                    reasons.append(f"Moderate skin ratio: {skin_ratio:.2%}")
+                
+                if 0.5 < aspect_ratio < 0.8:
+                    risk_score += 10
+                    reasons.append(f"Suspicious aspect ratio: {aspect_ratio:.2f}")
+                
+                if color_distribution['warm_ratio'] > 0.6:
+                    risk_score += 10
+                    reasons.append(f"High warm color ratio: {color_distribution['warm_ratio']:.2%}")
+                
+                if contrast > 0.7:
+                    risk_score += 5
+                    reasons.append(f"High contrast: {contrast:.2f}")
             
             # Determine level
             if risk_score >= 50:

@@ -124,10 +124,10 @@ class ImageAutomation:
         print(f"Source order this run: {[s.split('/')[-1][:30] for s in shuffled_sources]}")
         
         if self.is_pro:
-            # Use pro scraper with smart selection
+            # Request more candidates so we have fallbacks if NSFW blocks the top pick
             images = self.scraper.smart_image_selection(
                 shuffled_sources,
-                count=num_images,
+                count=10,  # Top 10 candidates - we'll iterate until one passes safety
                 max_pages_per_source=self.max_pages_per_source
             )
             
@@ -168,45 +168,75 @@ class ImageAutomation:
             print("Failed to download any images. Skipping this cycle.")
             return
         
-        # Fetch FULL metadata from archive.org for richer content
-        if self.is_pro and images[0].get('identifier'):
-            print("\n📚 Fetching full metadata from archive.org...")
-            full_meta = self.scraper.fetch_full_metadata(images[0]['identifier'])
-            if full_meta.get('metadata'):
-                meta = full_meta['metadata']
-                # Merge richer metadata fields
-                for key in ['description', 'creator', 'date', 'subject', 'publisher',
-                            'language', 'source', 'rights', 'coverage', 'contributor',
-                            'notes', 'references', 'uploader']:
-                    if meta.get(key) and not images[0].get(key):
-                        images[0][key] = meta[key]
-                # Update description if richer one available
-                if meta.get('description'):
-                    images[0]['description'] = meta['description']
-                print(f"✅ Retrieved extended metadata ({len(meta)} fields)")
-        
-        # Apply NSFW detection on the downloaded image
-        if self.nsfw_detector:
-            print("\n🔒 Running NSFW safety check...")
-            try:
-                nsfw_info = dict(images[0])
-                nsfw_info['local_path'] = downloaded_paths[0]
-                nsfw_result = self.nsfw_detector.detect_nsfw(nsfw_info)
-                if nsfw_result.get('blocked') or nsfw_result.get('overall_level') in ('high_risk', 'blocked'):
-                    print(f"⛔ NSFW content detected - blocking post: {nsfw_result.get('reason', 'unknown')}")
-                    # Log what triggered the block for debugging
-                    text_check = nsfw_result.get('checks', {}).get('text', {})
-                    if text_check.get('keywords'):
-                        print(f"   Triggered keywords: {text_check['keywords']}")
-                    for p in downloaded_paths:
+        # Try each candidate in order until one passes safety checks
+        chosen_idx = None
+        for idx in range(len(images)):
+            candidate = images[idx]
+            cand_path = candidate.get('local_path')
+            if not cand_path or not os.path.exists(cand_path):
+                continue
+            
+            print(f"\n--- Evaluating candidate {idx+1}/{len(images)} ---")
+            print(f"Title: {candidate.get('title', 'unknown')[:80]}")
+            
+            # Fetch full metadata
+            if self.is_pro and candidate.get('identifier'):
+                print("📚 Fetching full metadata from archive.org...")
+                full_meta = self.scraper.fetch_full_metadata(candidate['identifier'])
+                if full_meta.get('metadata'):
+                    meta = full_meta['metadata']
+                    for key in ['description', 'creator', 'date', 'subject', 'publisher',
+                                'language', 'source', 'rights', 'coverage', 'contributor',
+                                'notes', 'references', 'uploader']:
+                        if meta.get(key) and not candidate.get(key):
+                            candidate[key] = meta[key]
+                    if meta.get('description'):
+                        candidate['description'] = meta['description']
+                    print(f"✅ Retrieved extended metadata ({len(meta)} fields)")
+            
+            # NSFW check
+            if self.nsfw_detector:
+                print("🔒 Running NSFW safety check...")
+                try:
+                    nsfw_info = dict(candidate)
+                    nsfw_info['local_path'] = cand_path
+                    nsfw_result = self.nsfw_detector.detect_nsfw(nsfw_info)
+                    if nsfw_result.get('blocked') or nsfw_result.get('overall_level') in ('high_risk', 'blocked'):
+                        print(f"⛔ Blocked: {nsfw_result.get('reason', 'unknown')}")
+                        text_check = nsfw_result.get('checks', {}).get('text', {})
+                        if text_check.get('keywords'):
+                            print(f"   Triggered: {text_check['keywords']}")
+                        # Mark this candidate as posted to avoid re-evaluating
+                        if self.is_pro:
+                            self.scraper.mark_as_posted([candidate['url']])
+                        # Cleanup this image and try next
                         try:
-                            os.remove(p)
+                            os.remove(cand_path)
                         except Exception:
                             pass
-                    return
-                print(f"✅ NSFW check passed (level: {nsfw_result.get('overall_level', 'safe')})")
-            except Exception as e:
-                print(f"NSFW check error (continuing): {e}")
+                        continue
+                    print(f"✅ NSFW check passed (level: {nsfw_result.get('overall_level', 'safe')})")
+                except Exception as e:
+                    print(f"NSFW check error (continuing with this candidate): {e}")
+            
+            # This candidate passed!
+            chosen_idx = idx
+            break
+        
+        if chosen_idx is None:
+            print("\n❌ No candidates passed safety checks. Skipping this cycle.")
+            for p in downloaded_paths:
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+            return
+        
+        # Reorder so chosen candidate is first
+        images[0], images[chosen_idx] = images[chosen_idx], images[0]
+        downloaded_paths[0] = images[0]['local_path']
+        posted_urls[0] = images[0]['url']
+        print(f"\n✅ Selected candidate #{chosen_idx+1} for posting")
         
         # Generate AI content for the first image using FULL metadata
         print("\nGenerating description and hashtags...")

@@ -85,9 +85,42 @@ class ImageScraperPro:
         conn.close()
         return posted
     
-    def _is_duplicate(self, url: str) -> bool:
-        """Check if image was already posted"""
-        return url in self.posted_urls
+    def _is_duplicate(self, url: str, identifier: str = None, content_hash: str = None) -> bool:
+        """Check if image was already posted using multiple signals"""
+        # Layer 1: URL match
+        if url in self.posted_urls:
+            return True
+        # Layer 2: Archive identifier match (catches same item at different URLs)
+        if identifier:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT 1 FROM images WHERE url LIKE ? AND post_count > 0 LIMIT 1",
+                    (f"%{identifier}%",)
+                )
+                if cursor.fetchone():
+                    conn.close()
+                    return True
+                conn.close()
+            except Exception:
+                pass
+        # Layer 3: Content hash match
+        if content_hash:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT 1 FROM images WHERE content_hash = ? AND post_count > 0 LIMIT 1",
+                    (content_hash,)
+                )
+                if cursor.fetchone():
+                    conn.close()
+                    return True
+                conn.close()
+            except Exception:
+                pass
+        return False
     
     def _calculate_content_hash(self, image_data: bytes) -> str:
         """Calculate hash of image content for duplicate detection"""
@@ -289,8 +322,8 @@ class ImageScraperPro:
                     if not item_image_url:
                         continue
                     
-                    # Skip if duplicate
-                    if self._is_duplicate(item_image_url):
+                    # Skip if duplicate (URL or identifier match)
+                    if self._is_duplicate(item_image_url, identifier=identifier):
                         continue
                     
                     # Extract rich metadata
@@ -597,20 +630,33 @@ class ImageScraperPro:
         conn.close()
     
     def mark_as_posted(self, urls: List[str]):
-        """Mark images as posted in database"""
+        """Mark images as posted in database (creates entry if missing)"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         for url in urls:
+            # Try UPDATE first
             cursor.execute('''
                 UPDATE images 
                 SET last_posted = ?, post_count = post_count + 1
                 WHERE url = ?
             ''', (datetime.now(), url))
+            
+            # If no row was updated, INSERT a minimal record so dedup works
+            if cursor.rowcount == 0:
+                try:
+                    cursor.execute('''
+                        INSERT INTO images (url, source, scraped_at, last_posted, post_count)
+                        VALUES (?, ?, ?, ?, 1)
+                    ''', (url, 'unknown', datetime.now(), datetime.now()))
+                except Exception as e:
+                    print(f"Could not insert posted record for {url}: {e}")
+            
             self.posted_urls.add(url)
         
         conn.commit()
         conn.close()
+        print(f"📝 Marked {len(urls)} URL(s) as posted (total tracked: {len(self.posted_urls)})")
     
     def get_archive_name(self, url: str) -> str:
         """Extract archive name from URL"""

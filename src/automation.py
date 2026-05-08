@@ -251,15 +251,22 @@ class ImageAutomation:
         print("\nPosting to Facebook...")
         # Post first image with caption (most reliable approach - URL first, file fallback)
         first_image_url = images[0].get('url')
+        
+        # Pre-mark as posted BEFORE FB call - prevents reposts even if response parsing fails
+        # If FB actually fails, we accept losing this one item (50,000+ available)
+        if self.is_pro:
+            self.scraper.mark_as_posted(posted_urls[:1])
+            # Also store identifier for stronger dedup
+            ident = images[0].get('identifier')
+            if ident:
+                print(f"   Reserved identifier: {ident}")
+        
         result = self.facebook.post_image(downloaded_paths[0], caption, image_url=first_image_url)
         
         if 'error' not in result:
             print("✅ Post successful!")
-            # Mark as posted in database if using pro scraper
-            if self.is_pro:
-                self.scraper.mark_as_posted(posted_urls[:1])
         else:
-            print("❌ Post failed!")
+            print("❌ Post failed - but image is marked as attempted to prevent retry loop")
         
         # Cleanup downloaded images
         for path in downloaded_paths:

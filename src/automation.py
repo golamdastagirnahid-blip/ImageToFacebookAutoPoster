@@ -140,6 +140,12 @@ class ImageAutomation:
         print(f"Starting post cycle at {datetime.now()}")
         print(f"{'='*50}\n")
         
+        # Start Telegram session (buffers events for one arranged message at cycle end)
+        try:
+            self.telegram.start_session(self.sources)
+        except Exception:
+            pass
+        
         # Get images using appropriate scraper
         print("Fetching images from archives...")
         num_images = random.randint(1, self.max_images_per_post)
@@ -178,6 +184,14 @@ class ImageAutomation:
             
             if not images:
                 print("No quality images found. Skipping this cycle.")
+                try:
+                    self.telegram.add_event('🔍', 'Scraper returned 0 candidates from all sources')
+                    self.telegram.send_cycle_skip(
+                        'No quality images found',
+                        {'sources_tried': len(self.sources)},
+                    )
+                except Exception:
+                    pass
                 return
             
             # Pro scraper already downloads and validates
@@ -185,6 +199,10 @@ class ImageAutomation:
             posted_urls = [img['url'] for img in images]
             
             print(f"Selected {len(images)} high-quality images")
+            try:
+                self.telegram.add_event('📥', f"Scraped {len(images)} candidate(s)")
+            except Exception:
+                pass
             for img in images:
                 quality = img.get('quality', {})
                 print(f"  - Score: {quality.get('quality_score', 0):.1f}/100, "
@@ -195,6 +213,10 @@ class ImageAutomation:
             
             if not images:
                 print("No images found. Skipping this cycle.")
+                try:
+                    self.telegram.send_cycle_skip('No images found', {'mode': 'basic scraper'})
+                except Exception:
+                    pass
                 return
             
             print(f"Found {len(images)} image(s)")
@@ -211,6 +233,10 @@ class ImageAutomation:
         
         if not downloaded_paths:
             print("Failed to download any images. Skipping this cycle.")
+            try:
+                self.telegram.send_cycle_skip('Failed to download any candidate images')
+            except Exception:
+                pass
             return
         
         # Try each candidate in order until one passes safety checks
@@ -341,6 +367,15 @@ class ImageAutomation:
                         text_check = nsfw_result.get('checks', {}).get('text', {})
                         if text_check.get('keywords'):
                             print(f"   Triggered: {text_check['keywords']}")
+                        try:
+                            kw = text_check.get('keywords') or []
+                            kw_str = ', '.join(kw[:5]) if kw else nsfw_result.get('reason', 'unknown')
+                            self.telegram.add_event(
+                                '⛔',
+                                f"NSFW block #{idx+1}: {candidate.get('title', '?')[:40]} — {kw_str}",
+                            )
+                        except Exception:
+                            pass
                         # Mark this candidate as posted to avoid re-evaluating
                         if self.is_pro:
                             self.scraper.mark_as_posted([candidate['url']])
@@ -351,6 +386,13 @@ class ImageAutomation:
                             pass
                         continue
                     print(f"✅ NSFW check passed (level: {nsfw_result.get('overall_level', 'safe')})")
+                    try:
+                        self.telegram.add_event(
+                            '✅',
+                            f"Candidate #{idx+1} passed NSFW (level: {nsfw_result.get('overall_level', 'safe')})",
+                        )
+                    except Exception:
+                        pass
                 except Exception as e:
                     print(f"NSFW check error (continuing with this candidate): {e}")
             
@@ -360,6 +402,13 @@ class ImageAutomation:
         
         if chosen_idx is None:
             print("\n❌ No candidates passed safety checks. Skipping this cycle.")
+            try:
+                self.telegram.send_cycle_skip(
+                    'All candidates blocked by NSFW / quality checks',
+                    {'candidates_evaluated': len(images)},
+                )
+            except Exception:
+                pass
             for p in downloaded_paths:
                 try:
                     os.remove(p)
@@ -407,6 +456,13 @@ class ImageAutomation:
         print(f"Metadata being sent to AI:\n{image_context}\n")
         ai_content = self.openrouter.generate_description(image_context)
         print(f"Generated: {ai_content['title']}")
+        try:
+            self.telegram.add_event(
+                '🤖',
+                f"AI caption ready: {ai_content.get('headline', ai_content.get('title', ''))[:60]}",
+            )
+        except Exception:
+            pass
         
         # Create caption
         caption = self.generate_caption(images[0], ai_content)
@@ -606,11 +662,27 @@ def main():
             
             if not fb_ok:
                 print("❌ Facebook connection failed after 3 attempts.")
+                try:
+                    automation.telegram.send_startup_alert(
+                        "Facebook API connection failed after 3 attempts. "
+                        "Token may be expired/revoked or network issue.",
+                    )
+                except Exception:
+                    pass
                 if attempt < max_attempts:
                     print(f"Will retry full cycle in 30s...")
                     time.sleep(30)
                     continue
                 return
+            
+            # Proactive token expiry check at every startup
+            try:
+                tok = automation.facebook.check_token_expiry()
+                days = tok.get('days_remaining')
+                if days is not None and days < 14:
+                    automation.telegram.send_token_warning(days)
+            except Exception:
+                pass
             
             # Execute the cycle
             if os.getenv('GITHUB_ACTIONS'):
@@ -637,6 +709,17 @@ def main():
             else:
                 print(f"\n💀 All {max_attempts} attempts exhausted. Final error:")
                 traceback.print_exc()
+                # Final Telegram alert before exit
+                try:
+                    tn = TelegramNotifier()
+                    tn.send_failure_alert(
+                        error=f"{type(last_exception).__name__}: {last_exception}",
+                        stage='main_loop',
+                        consecutive_failures=max_attempts,
+                        extra={'all_attempts_exhausted': 'yes'},
+                    )
+                except Exception:
+                    pass
                 # Exit with non-zero so GitHub Actions marks as failed
                 sys.exit(1)
 

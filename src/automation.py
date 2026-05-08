@@ -209,8 +209,12 @@ class ImageAutomation:
             print(f"\n--- Evaluating candidate {idx+1}/{len(images)} ---")
             print(f"Title: {candidate.get('title', 'unknown')[:80]}")
             
-            # Fetch full metadata + high-res image
-            if self.is_pro and candidate.get('identifier'):
+            # Fetch full metadata + high-res image (archive.org items only)
+            cand_url = candidate.get('url', '')
+            cand_source = candidate.get('source', '')
+            is_archive_org = 'archive.org' in cand_url or 'Internet Archive' in cand_source or 'David Rumsey' in cand_source or 'Cleveland' in cand_source or 'Propix' in cand_source or 'Metropolitan Museum of Art (Archive' in cand_source
+            
+            if self.is_pro and candidate.get('identifier') and is_archive_org:
                 print("📚 Fetching full metadata from archive.org...")
                 full_meta = self.scraper.fetch_full_metadata(candidate['identifier'])
                 if full_meta.get('metadata'):
@@ -272,6 +276,43 @@ class ImageAutomation:
                     if self.is_pro:
                         self.scraper.mark_as_posted([candidate['url']])
                     continue
+            else:
+                # Non-archive.org source: verify the already-downloaded image is FB-quality
+                # Try to upgrade to full_image_url if different from current url
+                full_url = candidate.get('full_image_url')
+                if full_url and full_url != candidate.get('url'):
+                    print(f"🎨 Trying full-res from {cand_source}: {full_url}")
+                    try:
+                        hires_result = self.scraper.download_and_validate_image(full_url)
+                        if hires_result and hires_result.get('local_path'):
+                            try:
+                                os.remove(cand_path)
+                            except Exception:
+                                pass
+                            cand_path = hires_result['local_path']
+                            candidate['local_path'] = cand_path
+                    except Exception as e:
+                        print(f"   Full-res download failed (using thumb): {e}")
+                
+                # Verify dimensions
+                try:
+                    from PIL import Image as PILImage
+                    with PILImage.open(cand_path) as im:
+                        w, h = im.size
+                        print(f"   Dimensions: {w}x{h}")
+                        if w < 500 or h < 350:
+                            print(f"⚠️  Too small for FB - skipping")
+                            try:
+                                os.remove(cand_path)
+                            except Exception:
+                                pass
+                            if self.is_pro:
+                                self.scraper.mark_as_posted([candidate['url']])
+                            continue
+                        candidate['width'] = w
+                        candidate['height'] = h
+                except Exception as e:
+                    print(f"   Dimension check failed: {e}")
             
             # NSFW check
             if self.nsfw_detector:

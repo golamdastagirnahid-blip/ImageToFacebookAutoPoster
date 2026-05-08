@@ -89,7 +89,11 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          # ARCHIVE_SOURCES can include both archive.org URLs AND special keywords:
+          # loc, nasa, met, smithsonian
+          # Example: "https://archive.org/details/clevelandart,loc,nasa,met"
           ARCHIVE_SOURCES: ${{ secrets.ARCHIVE_SOURCES }}
+          SMITHSONIAN_API_KEY: ${{ secrets.SMITHSONIAN_API_KEY }}
           MIN_POST_INTERVAL_HOURS: ${{ secrets.MIN_POST_INTERVAL_HOURS }}
           MAX_POST_INTERVAL_HOURS: ${{ secrets.MAX_POST_INTERVAL_HOURS }}
           CREDIT_TEXT: ${{ secrets.CREDIT_TEXT }}

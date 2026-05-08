@@ -712,16 +712,29 @@ class ImageScraperPro:
     
     def get_archive_name(self, url: str) -> str:
         """Extract archive name from URL"""
-        if 'david-rumsey' in url:
+        u = (url or '').lower()
+        if 'david-rumsey' in u:
             return 'David Rumsey Map Collection'
-        elif 'metropolitanmuseum' in url:
+        elif 'metropolitanmuseumofart-gallery' in u:
+            return 'Metropolitan Museum of Art (Archive.org)'
+        elif 'metmuseum.org' in u or u == 'met':
             return 'Metropolitan Museum of Art'
-        elif 'propix' in url:
+        elif 'propix' in u:
             return 'Propix Archive'
-        elif 'clevelandart' in url:
+        elif 'clevelandart' in u:
             return 'Cleveland Museum of Art'
-        else:
+        elif 'publicdomainreview' in u:
+            return 'The Public Domain Review'
+        elif 'loc.gov' in u or u == 'loc':
+            return 'Library of Congress'
+        elif 'nasa.gov' in u or u == 'nasa':
+            return 'NASA'
+        elif 'si.edu' in u or u == 'smithsonian':
+            return 'Smithsonian Institution'
+        elif 'archive.org' in u:
             return 'Internet Archive'
+        else:
+            return 'Public Domain Archives'
     
     def smart_image_selection(self, sources: List[str], count: int = 3, max_pages_per_source: int = 5) -> List[Dict]:
         """Intelligent image selection with pagination, quality filtering, and ranking"""
@@ -730,24 +743,42 @@ class ImageScraperPro:
         for source in sources:
             print(f"\nProcessing source: {source}")
             
-            if 'archive.org' in source:
-                # Use archive.org API - access thousands of images per collection
-                images = self.scrape_archive_org_paginated(source, max_pages=max_pages_per_source, max_images=200)
-            elif 'publicdomainreview.org' in source:
-                images = self._scrape_archive_page(source)
-            else:
+            try:
+                if 'archive.org' in source:
+                    images = self.scrape_archive_org_paginated(source, max_pages=max_pages_per_source, max_images=200)
+                elif 'publicdomainreview.org' in source:
+                    images = self._scrape_archive_page(source)
+                elif source == 'loc' or 'loc.gov' in source:
+                    from extra_sources import fetch_library_of_congress
+                    images = fetch_library_of_congress(limit=80)
+                elif source == 'nasa' or 'nasa.gov' in source:
+                    from extra_sources import fetch_nasa
+                    images = fetch_nasa(limit=80)
+                elif source == 'met' or 'metmuseum.org' in source:
+                    from extra_sources import fetch_met_museum
+                    images = fetch_met_museum(limit=50)
+                elif source == 'smithsonian' or 'si.edu' in source:
+                    from extra_sources import fetch_smithsonian
+                    images = fetch_smithsonian(limit=80)
+                else:
+                    print(f"   Unknown source format, skipping")
+                    continue
+            except Exception as e:
+                print(f"   Source error (continuing): {e}")
                 continue
             
             print(f"Found {len(images)} candidate images")
             
             # Download and validate in parallel
-            valid_images = self.process_images_parallel(images, max_workers=3)
-            print(f"Validated {len(valid_images)} images")
-            
-            all_candidates.extend(valid_images)
+            try:
+                valid_images = self.process_images_parallel(images, max_workers=3)
+                print(f"Validated {len(valid_images)} images")
+                all_candidates.extend(valid_images)
+            except Exception as e:
+                print(f"   Validation error (continuing): {e}")
             
             # Delay between sources
-            time.sleep(random.uniform(3, 6))
+            time.sleep(random.uniform(2, 4))
         
         print(f"\nTotal candidates: {len(all_candidates)}")
         

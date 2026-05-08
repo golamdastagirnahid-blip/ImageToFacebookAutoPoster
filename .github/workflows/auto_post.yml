@@ -70,10 +70,11 @@ jobs:
       
       - name: Random human-like startup delay
         run: |
-          # Wait random 0-45 minutes before posting (simulates human behavior)
-          DELAY=$((RANDOM % 2700))
-          echo "Waiting ${DELAY} seconds before posting..."
-          sleep $DELAY
+          # PAUSED FOR TESTING - Re-enable later for humanization
+          # DELAY=$((RANDOM % 2700))
+          # echo "Waiting ${DELAY} seconds before posting..."
+          # sleep $DELAY
+          echo "Random delay PAUSED for testing - posting immediately"
       
       - name: Run automation
         env:

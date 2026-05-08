@@ -7,10 +7,19 @@ load_dotenv()
 
 class OpenRouterClient:
     def __init__(self):
-        self.api_key = os.getenv('OPENROUTER_API_KEY')
-        # Build a fallback chain of free models (used in order if rate-limited)
+        # ===== GROQ (Primary - faster, larger free quota) =====
+        self.groq_api_key = os.getenv('GROQ_API_KEY', '').strip()
+        self.groq_url = "https://api.groq.com/openai/v1/chat/completions"
+        self.groq_models = [
+            'llama-3.3-70b-versatile',      # Best quality - 70B
+            'llama-3.1-8b-instant',          # Fast fallback
+            'gemma2-9b-it',                  # Google's Gemma
+            'mixtral-8x7b-32768',            # Mixtral - long context
+        ]
+        
+        # ===== OPENROUTER (Fallback) =====
+        self.api_key = os.getenv('OPENROUTER_API_KEY', '').strip()
         env_model = os.getenv('OPENROUTER_MODEL', '').strip()
-        # Verified working free models on OpenRouter (as of 2025)
         self.fallback_models = [
             env_model if env_model else None,
             'meta-llama/llama-3.3-70b-instruct:free',
@@ -20,21 +29,62 @@ class OpenRouterClient:
             'meta-llama/llama-3.2-3b-instruct:free',
             'mistralai/mistral-7b-instruct:free',
             'google/gemma-2-9b-it:free',
-            'microsoft/phi-3-mini-128k-instruct:free',
         ]
-        # Remove None and duplicates while preserving order
         seen = set()
         self.fallback_models = [m for m in self.fallback_models 
                                 if m and not (m in seen or seen.add(m))]
-        self.model = self.fallback_models[0]
+        self.model = self.fallback_models[0] if self.fallback_models else None
         self.base_url = "https://openrouter.ai/api/v1"
-        print(f"OpenRouter primary model: {self.model}")
-        print(f"Fallback chain: {len(self.fallback_models)} models")
         
+        if self.groq_api_key:
+            print(f"🚀 Groq enabled - {len(self.groq_models)} models")
+        else:
+            print("⚠️  GROQ_API_KEY not set - using OpenRouter only")
+        print(f"OpenRouter fallback: {len(self.fallback_models)} models")
+        
+    def _call_groq(self, prompt: str) -> Dict[str, str]:
+        """Try Groq models in order. Returns parsed dict or None on total failure."""
+        if not self.groq_api_key:
+            return None
+        for model in self.groq_models:
+            try:
+                print(f"🚀 Trying Groq: {model}")
+                response = requests.post(
+                    self.groq_url,
+                    headers={
+                        'Authorization': f'Bearer {self.groq_api_key}',
+                        'Content-Type': 'application/json'
+                    },
+                    json={
+                        'model': model,
+                        'messages': [
+                            {'role': 'system', 'content': 'You are a professional museum curator and historian who writes detailed, engaging Facebook posts about historical images. Always follow the exact output format requested.'},
+                            {'role': 'user', 'content': prompt}
+                        ],
+                        'max_tokens': 2000,
+                        'temperature': 0.75,
+                    },
+                    timeout=30
+                )
+                if response.status_code in (400, 401, 402, 404, 408, 429, 500, 502, 503, 504):
+                    print(f"  Groq {model} returned {response.status_code}, trying next...")
+                    continue
+                response.raise_for_status()
+                result = response.json()
+                if 'choices' not in result or not result['choices']:
+                    continue
+                content = result['choices'][0]['message']['content']
+                if not content or len(content) < 100:
+                    continue
+                print(f"✅ Got response from Groq: {model}")
+                return self._parse_response(content)
+            except Exception as e:
+                print(f"  Groq {model} error: {e}")
+                continue
+        return None
+    
     def generate_description(self, image_context: str) -> Dict[str, str]:
-        """Generate image description and hashtags using OpenRouter"""
-        if not self.api_key:
-            raise ValueError("OPENROUTER_API_KEY not set")
+        """Generate image description and hashtags - try Groq first, then OpenRouter"""
         
         prompt = f"""You are a PROFESSIONAL museum curator, historian, and Facebook social media editor.
 Your job is to write a detailed, engaging, and professional Facebook post about a historical image.
@@ -74,7 +124,21 @@ Rules:
 - Write professionally but with warmth.
 - Make people want to read every word."""
         
-        # Try each model in the fallback chain
+        # ===== TIER 1: Try Groq first (fastest, best free tier) =====
+        groq_result = self._call_groq(prompt)
+        if groq_result and groq_result.get('description') and len(groq_result.get('description', '')) > 100:
+            return groq_result
+        
+        if not self.api_key:
+            print("⚠️  No OpenRouter API key - using fallback caption")
+            return {
+                'description': 'A remarkable image from the public domain archives, preserved for future generations.',
+                'hashtags': '#publicdomain #art #history #culture #archives #heritage',
+                'title': 'Historical Image'
+            }
+        
+        # ===== TIER 2: OpenRouter fallback chain =====
+        print("\n📡 Falling back to OpenRouter...")
         last_error = None
         for attempt_model in self.fallback_models:
             try:

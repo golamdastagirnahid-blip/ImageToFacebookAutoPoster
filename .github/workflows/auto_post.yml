@@ -82,6 +82,7 @@ jobs:
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           ARCHIVE_SOURCES: ${{ secrets.ARCHIVE_SOURCES }}
           MIN_POST_INTERVAL_HOURS: ${{ secrets.MIN_POST_INTERVAL_HOURS }}
           MAX_POST_INTERVAL_HOURS: ${{ secrets.MAX_POST_INTERVAL_HOURS }}

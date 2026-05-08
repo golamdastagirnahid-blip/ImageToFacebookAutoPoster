@@ -46,9 +46,10 @@ jobs:
           CREDIT_TEXT: ${{ secrets.CREDIT_TEXT }}
           DISCLAIMER_TEXT: ${{ secrets.DISCLAIMER_TEXT }}
           GITHUB_ACTIONS: "true"
-          MIN_IMAGE_WIDTH: "400"
-          MIN_IMAGE_HEIGHT: "300"
-          MIN_IMAGE_SIZE_KB: "10"
+          MIN_IMAGE_WIDTH: "100"
+          MIN_IMAGE_HEIGHT: "100"
+          MIN_IMAGE_SIZE_KB: "1"
+          MAX_IMAGE_SIZE_MB: "50"
         run: |
           cd src
           python automation.py

@@ -8,11 +8,24 @@ load_dotenv()
 class OpenRouterClient:
     def __init__(self):
         self.api_key = os.getenv('OPENROUTER_API_KEY')
-        # Use env var only if non-empty, else fall back to known free model
+        # Build a fallback chain of free models (used in order if rate-limited)
         env_model = os.getenv('OPENROUTER_MODEL', '').strip()
-        self.model = env_model if env_model else 'meta-llama/llama-3.3-70b-instruct:free'
+        self.fallback_models = [
+            env_model if env_model else None,
+            'meta-llama/llama-3.3-70b-instruct:free',
+            'google/gemini-2.0-flash-exp:free',
+            'deepseek/deepseek-chat-v3-0324:free',
+            'qwen/qwen-2.5-72b-instruct:free',
+            'mistralai/mistral-7b-instruct:free',
+        ]
+        # Remove None and duplicates while preserving order
+        seen = set()
+        self.fallback_models = [m for m in self.fallback_models 
+                                if m and not (m in seen or seen.add(m))]
+        self.model = self.fallback_models[0]
         self.base_url = "https://openrouter.ai/api/v1"
-        print(f"OpenRouter model: {self.model}")
+        print(f"OpenRouter primary model: {self.model}")
+        print(f"Fallback chain: {len(self.fallback_models)} models")
         
     def generate_description(self, image_context: str) -> Dict[str, str]:
         """Generate image description and hashtags using OpenRouter"""
@@ -57,35 +70,59 @@ Rules:
 - Write professionally but with warmth.
 - Make people want to read every word."""
         
+        # Try each model in the fallback chain
+        last_error = None
+        for attempt_model in self.fallback_models:
+            try:
+                print(f"Trying model: {attempt_model}")
+                response = requests.post(
+                    f"{self.base_url}/chat/completions",
+                    headers={
+                        'Authorization': f'Bearer {self.api_key}',
+                        'Content-Type': 'application/json'
+                    },
+                    json={
+                        'model': attempt_model,
+                        'messages': [
+                            {'role': 'system', 'content': 'You are a helpful social media content creator.'},
+                            {'role': 'user', 'content': prompt}
+                        ],
+                        'max_tokens': 1500,
+                        'temperature': 0.75
+                    },
+                    timeout=45
+                )
+                
+                # If rate-limited or server error, try next model
+                if response.status_code in (429, 502, 503):
+                    print(f"  Model {attempt_model} returned {response.status_code}, trying next...")
+                    last_error = f"HTTP {response.status_code}"
+                    continue
+                
+                response.raise_for_status()
+                result = response.json()
+                content = result['choices'][0]['message']['content']
+                print(f"✅ Got response from: {attempt_model}")
+                return self._parse_response(content)
+                
+            except requests.exceptions.HTTPError as e:
+                code = e.response.status_code if e.response is not None else 0
+                if code in (429, 502, 503):
+                    print(f"  {attempt_model} rate-limited/unavailable, trying next...")
+                    last_error = e
+                    continue
+                last_error = e
+                break
+            except Exception as e:
+                last_error = e
+                print(f"  Error with {attempt_model}: {e}")
+                continue
+        
+        # All models failed - return fallback
         try:
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers={
-                    'Authorization': f'Bearer {self.api_key}',
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    'model': self.model,
-                    'messages': [
-                        {'role': 'system', 'content': 'You are a helpful social media content creator.'},
-                        {'role': 'user', 'content': prompt}
-                    ],
-                    'max_tokens': 1500,
-                    'temperature': 0.75
-                },
-                timeout=30
-            )
-            response.raise_for_status()
-            
-            result = response.json()
-            content = result['choices'][0]['message']['content']
-            
-            # Parse the response
-            parsed = self._parse_response(content)
-            return parsed
-            
+            raise last_error if last_error else Exception("All models failed")
         except Exception as e:
-            print(f"Error generating description: {e}")
+            print(f"Error generating description (all fallbacks exhausted): {e}")
             if hasattr(e, 'response') and e.response is not None:
                 print(f"OpenRouter response: {e.response.text}")
             return {

@@ -411,18 +411,55 @@ class ImageScraperPro:
             
             # Find the best image file (high-res original, not thumbnail)
             files = data.get('files', [])
-            best_image = None
-            best_size = 0
+            
+            # Categorize by preference - originals first, then large derivatives
+            originals = []
+            derivatives = []
             for f in files:
-                name = f.get('name', '').lower()
-                fmt = f.get('format', '').lower()
-                if any(name.endswith(ext) for ext in ['.jpg', '.jpeg', '.png']):
-                    # Prefer original over derivatives
-                    if 'original' in f.get('source', '').lower() or fmt in ['jpeg', 'png', 'jp2']:
-                        size = int(f.get('size', 0) or 0)
-                        if size > best_size and size < 20 * 1024 * 1024:  # Under 20MB
-                            best_size = size
-                            best_image = f.get('name')
+                name = f.get('name', '')
+                name_lower = name.lower()
+                fmt = (f.get('format', '') or '').lower()
+                source = (f.get('source', '') or '').lower()
+                
+                # Skip thumbnails and non-images
+                if 'thumb' in name_lower or '_small' in name_lower or 'thumbnail' in fmt:
+                    continue
+                if not any(name_lower.endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.tif', '.tiff']):
+                    continue
+                
+                size = int(f.get('size', 0) or 0)
+                # Skip absurdly large or zero
+                if size <= 0 or size > 30 * 1024 * 1024:
+                    continue
+                # Skip too small (likely thumbnails)
+                if size < 50 * 1024:  # Under 50KB
+                    continue
+                
+                entry = (size, name)
+                if source == 'original':
+                    originals.append(entry)
+                else:
+                    derivatives.append(entry)
+            
+            # Prefer originals (largest), fall back to derivatives
+            best_image = None
+            if originals:
+                originals.sort(reverse=True)  # Largest first
+                # But not too huge - pick largest under 10MB
+                for size, name in originals:
+                    if size < 10 * 1024 * 1024:
+                        best_image = name
+                        break
+                if not best_image:
+                    best_image = originals[0][1]
+            elif derivatives:
+                derivatives.sort(reverse=True)
+                for size, name in derivatives:
+                    if size < 10 * 1024 * 1024:
+                        best_image = name
+                        break
+                if not best_image:
+                    best_image = derivatives[0][1]
             
             full_image_url = None
             if best_image:

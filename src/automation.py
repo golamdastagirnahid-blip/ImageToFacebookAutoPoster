@@ -179,7 +179,7 @@ class ImageAutomation:
             print(f"\n--- Evaluating candidate {idx+1}/{len(images)} ---")
             print(f"Title: {candidate.get('title', 'unknown')[:80]}")
             
-            # Fetch full metadata
+            # Fetch full metadata + high-res image
             if self.is_pro and candidate.get('identifier'):
                 print("📚 Fetching full metadata from archive.org...")
                 full_meta = self.scraper.fetch_full_metadata(candidate['identifier'])
@@ -193,6 +193,54 @@ class ImageAutomation:
                     if meta.get('description'):
                         candidate['description'] = meta['description']
                     print(f"✅ Retrieved extended metadata ({len(meta)} fields)")
+                
+                # CRITICAL: Replace thumbnail with high-res image
+                full_url = full_meta.get('full_image_url')
+                if full_url:
+                    print(f"🎨 Found high-res image: {full_url}")
+                    # Download high-res version
+                    hires_path, _ = self.scraper.download_image(full_url)
+                    if hires_path and os.path.exists(hires_path):
+                        # Verify resolution is acceptable for Facebook
+                        try:
+                            from PIL import Image as PILImage
+                            with PILImage.open(hires_path) as im:
+                                w, h = im.size
+                                print(f"   High-res dimensions: {w}x{h}")
+                                if w >= 600 and h >= 400:
+                                    # Replace thumbnail with hires
+                                    try:
+                                        os.remove(cand_path)
+                                    except Exception:
+                                        pass
+                                    candidate['local_path'] = hires_path
+                                    candidate['url'] = full_url
+                                    candidate['width'] = w
+                                    candidate['height'] = h
+                                    cand_path = hires_path
+                                    print(f"✅ Using high-res version for posting")
+                                else:
+                                    print(f"⚠️  High-res too small ({w}x{h}) - skipping candidate")
+                                    try:
+                                        os.remove(hires_path)
+                                        os.remove(cand_path)
+                                    except Exception:
+                                        pass
+                                    if self.is_pro:
+                                        self.scraper.mark_as_posted([candidate['url']])
+                                    continue
+                        except Exception as e:
+                            print(f"   Resolution check failed: {e}")
+                else:
+                    # No full-res URL found - thumbnail will be too small for FB
+                    print(f"⚠️  No high-res available, thumbnail only - skipping")
+                    try:
+                        os.remove(cand_path)
+                    except Exception:
+                        pass
+                    if self.is_pro:
+                        self.scraper.mark_as_posted([candidate['url']])
+                    continue
             
             # NSFW check
             if self.nsfw_detector:

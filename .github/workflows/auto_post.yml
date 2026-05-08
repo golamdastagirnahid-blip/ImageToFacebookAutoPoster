@@ -88,10 +88,10 @@ jobs:
           CREDIT_TEXT: ${{ secrets.CREDIT_TEXT }}
           DISCLAIMER_TEXT: ${{ secrets.DISCLAIMER_TEXT }}
           GITHUB_ACTIONS: "true"
-          MIN_IMAGE_WIDTH: "100"
-          MIN_IMAGE_HEIGHT: "100"
-          MIN_IMAGE_SIZE_KB: "1"
-          MAX_IMAGE_SIZE_MB: "50"
+          MIN_IMAGE_WIDTH: "600"
+          MIN_IMAGE_HEIGHT: "400"
+          MIN_IMAGE_SIZE_KB: "30"
+          MAX_IMAGE_SIZE_MB: "20"
           MAX_IMAGES_PER_POST: "1"
           MAX_PAGES_PER_SOURCE: "1"
           NSFW_STRICT_MODE: "true"

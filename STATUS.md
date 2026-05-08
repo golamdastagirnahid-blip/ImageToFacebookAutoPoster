@@ -1,6 +1,6 @@
 # 🤖 Auto-Poster Status
 
-_Last updated: 2026-05-08 08:27:28 UTC_
+_Last updated: 2026-05-08 08:34:26 UTC_
 
 ## 🟢 **HEALTHY**
 
@@ -8,12 +8,12 @@ _Last updated: 2026-05-08 08:27:28 UTC_
 
 ## 📊 Statistics
 
-- **Total runs tracked:** 1
-- **Successes:** 1 (100.0%)
+- **Total runs tracked:** 2
+- **Successes:** 2 (100.0%)
 - **Failures:** 0
 - **Skipped:** 0
 - **Consecutive failures:** 0
-- **Posts in last 24h:** 1
+- **Posts in last 24h:** 2
 
 ## 🔐 Facebook Token
 
@@ -21,21 +21,22 @@ _Last updated: 2026-05-08 08:27:28 UTC_
 
 ## ✅ Last Successful Post
 
-- **Time:** 2026-05-08T08:27:28.115242Z
-- **Title:** Uncovering the Shell Map of Iowa
+- **Time:** 2026-05-08T08:34:26.974811Z
+- **Title:** Unveiling the Carte des royaumes de Siam
 - **Source:** David Rumsey Map Collection
-- **Image size:** 1536x1038
-- **Post ID:** 1104960692700888_122094854955317603
+- **Image size:** 1536x950
+- **Post ID:** 1104960692700888_122094858795317603
 - **AI model:** unknown
 
 ## 📚 Source Distribution
 
-- **David Rumsey Map Collection:** 1 posts (100.0%)
+- **David Rumsey Map Collection:** 2 posts (100.0%)
 
 ## 📜 Recent Runs (last 10)
 
 | Time | Status | Source | Title |
 |------|--------|--------|-------|
+| 2026-05-08 08:34:26 | ✅ | David Rumsey Map Col | Unveiling the Carte des royaumes de Siam |
 | 2026-05-08 08:27:28 | ✅ | David Rumsey Map Col | Uncovering the Shell Map of Iowa |
 
 ---

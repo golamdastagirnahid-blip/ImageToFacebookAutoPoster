@@ -94,13 +94,25 @@ class ImageScraperPro:
         return hashlib.md5(image_data).hexdigest()
     
     def _validate_image_url(self, url: str) -> bool:
-        """Validate image URL before download"""
+        """Validate image URL"""
         if not url or url.startswith('data:'):
             return False
-        
-        # Check for valid extensions
-        valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']
-        return any(url.lower().endswith(ext) for ext in valid_extensions)
+        return True
+    
+    def _get_archive_name(self, url: str) -> str:
+        """Extract archive name from URL"""
+        if 'david-rumsey' in url:
+            return 'David Rumsey Map Collection'
+        elif 'metropolitanmuseum' in url:
+            return 'Metropolitan Museum of Art'
+        elif 'propix' in url:
+            return 'Propix Archive'
+        elif 'clevelandart' in url:
+            return 'Cleveland Museum of Art'
+        elif 'publicdomainreview' in url:
+            return 'The Public Domain Review'
+        else:
+            return 'Internet Archive'
     
     def _check_image_quality(self, image_data: bytes) -> Dict:
         """Analyze image quality and return metrics"""

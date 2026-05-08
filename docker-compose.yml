@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  automation:
+    build: .
+    container_name: fb-auto-poster
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./image_cache:/app/image_cache
+      - ./logs:/app/logs
+      - ./image_database.db:/app/image_database.db
+      - ./health_monitor.db:/app/health_monitor.db
+      - ./rate_limiter.db:/app/rate_limiter.db
+      - ./token_manager.db:/app/token_manager.db
+      - ./scheduler.db:/app/scheduler.db
+      - ./analytics.db:/app/analytics.db
+    environment:
+      - TZ=UTC
+    networks:
+      - automation_network
+
+  # Optional: Add a monitoring dashboard
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - automation_network
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    networks:
+      - automation_network
+    profiles:
+      - monitoring
+
+networks:
+  automation_network:
+    driver: bridge
+
+volumes:
+  grafana-storage:

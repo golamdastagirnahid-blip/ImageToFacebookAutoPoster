@@ -2,8 +2,16 @@ name: Auto Post Images to Facebook
 
 on:
   schedule:
-    # Run every 3 hours for more varied posting
-    - cron: '0 */3 * * *'
+    # 8 posts/day at natural (non-robotic) times in UTC
+    # Each run adds its own 0-45min random delay so actual post times vary
+    - cron: '17 1 * * *'    # ~morning (varies 1:17-2:02 UTC)
+    - cron: '43 4 * * *'    # ~late morning
+    - cron: '22 7 * * *'    # ~midday
+    - cron: '51 10 * * *'   # ~afternoon
+    - cron: '8 13 * * *'    # ~late afternoon
+    - cron: '37 16 * * *'   # ~evening
+    - cron: '14 19 * * *'   # ~night
+    - cron: '49 22 * * *'   # ~late night
   workflow_dispatch:
     inputs:
       mode:
@@ -59,6 +67,13 @@ jobs:
           mkdir -p data
           if [ -f data/image_database.db ]; then cp data/image_database.db src/; fi
           if [ -f data/nsfw_detector.db ]; then cp data/nsfw_detector.db src/; fi
+      
+      - name: Random human-like startup delay
+        run: |
+          # Wait random 0-45 minutes before posting (simulates human behavior)
+          DELAY=$((RANDOM % 2700))
+          echo "Waiting ${DELAY} seconds before posting..."
+          sleep $DELAY
       
       - name: Run automation
         env:

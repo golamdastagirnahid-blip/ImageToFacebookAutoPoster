@@ -11,6 +11,7 @@ from facebook_poster import FacebookPoster
 from image_processor import ImageProcessor
 from health_report import HealthReporter
 from engagement_tracker import EngagementTracker
+from telegram_notifier import TelegramNotifier
 
 # Optional NSFW detector
 try:
@@ -57,6 +58,8 @@ class ImageAutomation:
         except Exception as e:
             print(f"Engagement tracker init failed (non-fatal): {e}")
             self.engagement = None
+        # Telegram notifier (sends post summaries + alerts)
+        self.telegram = TelegramNotifier()
         
         # Configuration
         self.min_interval = int(os.getenv('MIN_POST_INTERVAL_HOURS', '4') or '4')
@@ -454,20 +457,42 @@ class ImageAutomation:
         
         if 'error' not in result:
             print("✅ Post successful!")
+            post_id = result.get('post_id') or result.get('id', 'unknown')
+            token_info = {}
             try:
-                # Get token expiry info for STATUS.md
                 token_info = self.facebook.check_token_expiry()
                 self.health.log_run('success', {
                     'title': ai_content.get('title', 'unknown'),
                     'source': images[0].get('source', 'unknown'),
                     'image_size': f"{images[0].get('width', 0)}x{images[0].get('height', 0)}",
-                    'post_id': result.get('post_id') or result.get('id', 'unknown'),
+                    'post_id': post_id,
                     'identifier': images[0].get('identifier', ''),
                     'token_days_remaining': token_info.get('days_remaining'),
                 })
                 self.health.generate_status_md()
             except Exception as e:
                 print(f"Health log error: {e}")
+            
+            # Send Telegram notification with post summary + image preview
+            try:
+                self.telegram.send_post_summary(
+                    image_path=downloaded_paths[0],
+                    post_data={
+                        'headline': ai_content.get('headline', ''),
+                        'subheadline': ai_content.get('subheadline', ''),
+                        'title': ai_content.get('title', ''),
+                        'source': images[0].get('source', 'unknown'),
+                        'post_id': post_id,
+                        'image_size': f"{images[0].get('width', 0)}x{images[0].get('height', 0)}",
+                        'identifier': images[0].get('identifier', ''),
+                    },
+                )
+                # Token warning if expiring soon
+                days_left = token_info.get('days_remaining')
+                if days_left is not None and 0 < days_left < 14:
+                    self.telegram.send_token_warning(days_left)
+            except Exception as e:
+                print(f"Telegram notify failed (non-fatal): {e}")
             
             # Update engagement metrics for past posts (run every cycle)
             try:
@@ -487,6 +512,15 @@ class ImageAutomation:
                 self.health.generate_status_md()
             except Exception:
                 pass
+            try:
+                fails = self.health.get_consecutive_failures()
+                self.telegram.send_failure_alert(
+                    error=str(result.get('error', 'unknown'))[:300],
+                    stage='facebook_post',
+                    consecutive_failures=fails,
+                )
+            except Exception as e:
+                print(f"Telegram alert failed: {e}")
         
         # Cleanup downloaded images
         for path in downloaded_paths:

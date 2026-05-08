@@ -23,7 +23,7 @@ class ImageProcessor:
                  watermark_text: str = "Public Domain Archives",
                  enable_enhance: bool = True,
                  enable_headline_card: bool = False,
-                 brand_name: str = "Vintage Archives"):
+                 brand_name: str = "The Time Capsule Archive"):
         self.enable_watermark = enable_watermark
         self.watermark_text = watermark_text
         self.enable_enhance = enable_enhance
@@ -189,14 +189,20 @@ class ImageProcessor:
         """
         try:
             CANVAS_W, CANVAS_H = 1080, 1350
-            BANNER_H = 380  # Top banner height
-            IMG_AREA_H = CANVAS_H - BANNER_H  # Bottom image area
+            BRAND_H = 70           # Top brand strip
+            BANNER_H = 360         # Headline area below brand
+            CREDIT_H = 50          # Source credit strip (between banner and image)
+            IMG_AREA_H = CANVAS_H - BRAND_H - BANNER_H - CREDIT_H  # 870px clean image
             
-            # Colors (matching the reference)
+            # Colors
+            BG_BRAND = (20, 20, 25)         # Dark navy for brand strip
             BG_TEXTURED = (235, 232, 228)   # Off-white textured paper
+            BG_CREDIT = (245, 243, 240)     # Light strip for source credit
             HIGHLIGHT_YELLOW = (255, 220, 0)
             TEXT_BLACK = (15, 15, 15)
             SUB_GRAY = (60, 60, 60)
+            BRAND_GOLD = (255, 220, 0)
+            CREDIT_GRAY = (95, 95, 95)
             
             # Open and process source image
             src = Image.open(image_path)
@@ -214,37 +220,41 @@ class ImageProcessor:
                 src = ImageEnhance.Color(src).enhance(1.05)
                 src = ImageEnhance.Sharpness(src).enhance(1.15)
             
-            # Create canvas
+            # Create canvas with brand strip at top
             canvas = Image.new('RGB', (CANVAS_W, CANVAS_H), BG_TEXTURED)
-            
-            # Add subtle paper texture (very light noise)
-            self._add_paper_texture(canvas, BANNER_H)
-            
-            # Fit source image into the bottom area (cover-style crop)
-            img_fitted = self._fit_cover(src, CANVAS_W, IMG_AREA_H)
-            canvas.paste(img_fitted, (0, BANNER_H))
-            
-            # Draw headline with yellow highlight
             draw = ImageDraw.Draw(canvas)
+            
+            # Top brand strip (dark navy)
+            draw.rectangle((0, 0, CANVAS_W, BRAND_H), fill=BG_BRAND)
+            self._draw_brand_strip(draw, self.brand_name, CANVAS_W, BRAND_H, BRAND_GOLD)
+            
+            # Headline banner area (textured paper)
+            self._add_paper_texture(canvas, BRAND_H, BRAND_H + BANNER_H)
+            
+            # Headline + subheadline in banner
             self._draw_headline_block(draw, headline, subheadline,
-                                       canvas_w=CANVAS_W, banner_h=BANNER_H,
+                                       canvas_w=CANVAS_W,
+                                       banner_top=BRAND_H,
+                                       banner_h=BANNER_H,
                                        highlight=HIGHLIGHT_YELLOW,
                                        text_color=TEXT_BLACK,
                                        sub_color=SUB_GRAY)
             
-            # Brand name (bottom-left)
-            self._draw_brand(draw, CANVAS_W, CANVAS_H, self.brand_name, TEXT_BLACK)
+            # Source credit strip (between headline and image - NOT on image)
+            credit_top = BRAND_H + BANNER_H
+            draw.rectangle((0, credit_top, CANVAS_W, credit_top + CREDIT_H), fill=BG_CREDIT)
+            self._draw_credit_strip(draw, source_name, CANVAS_W, credit_top, CREDIT_H, CREDIT_GRAY)
             
-            # Vertical source/date text (right edge)
-            if source_name:
-                self._draw_vertical_source(canvas, source_name,
-                                            BANNER_H, CANVAS_H, CANVAS_W)
+            # Image area (CLEAN - no overlays whatsoever)
+            img_top = credit_top + CREDIT_H
+            img_fitted = self._fit_cover(src, CANVAS_W, IMG_AREA_H)
+            canvas.paste(img_fitted, (0, img_top))
             
             # Save
             if output_path is None:
                 output_path = image_path
             canvas.save(output_path, 'JPEG', quality=90, optimize=True, progressive=True)
-            print(f"🎨 Headline card created: {CANVAS_W}x{CANVAS_H}")
+            print(f"🎨 Headline card created: {CANVAS_W}x{CANVAS_H} (image area: {IMG_AREA_H}px clean)")
             return output_path
         except Exception as e:
             import traceback
@@ -263,13 +273,16 @@ class ImageProcessor:
         top = (new_h - target_h) // 2
         return img.crop((left, top, left + target_w, top + target_h))
     
-    def _add_paper_texture(self, canvas: Image.Image, banner_h: int):
-        """Subtle paper-like noise on the top banner area."""
+    def _add_paper_texture(self, canvas: Image.Image, y_start: int, y_end: int = None):
+        """Subtle paper-like noise on a region of the canvas."""
         try:
             import random
+            if y_end is None:
+                y_end = y_start
+                y_start = 0
             pixels = canvas.load()
             w = canvas.width
-            for y in range(0, banner_h, 2):
+            for y in range(y_start, y_end, 2):
                 for x in range(0, w, 2):
                     if random.random() < 0.15:
                         r, g, b = pixels[x, y]
@@ -305,7 +318,8 @@ class ImageProcessor:
     
     def _draw_headline_block(self, draw, headline: str, subheadline: str,
                               canvas_w: int, banner_h: int,
-                              highlight, text_color, sub_color):
+                              highlight, text_color, sub_color,
+                              banner_top: int = 0):
         """Draw the headline (with yellow highlight) and subheadline."""
         margin = 40
         max_text_w = canvas_w - 2 * margin
@@ -314,7 +328,6 @@ class ImageProcessor:
         headline_size = 64
         font_h = self._load_font(headline_size, bold=True)
         lines = self._wrap_text(headline, font_h, max_text_w, draw)
-        # Shrink if too many lines
         while len(lines) > 3 and headline_size > 40:
             headline_size -= 4
             font_h = self._load_font(headline_size, bold=True)
@@ -333,8 +346,8 @@ class ImageProcessor:
         if sub_lines:
             total_h += int(headline_size * 0.4) + len(sub_lines) * sub_line_h
         
-        # Vertically center within banner
-        y = max(margin, (banner_h - total_h) // 2)
+        # Vertically center within banner (offset by banner_top)
+        y = banner_top + max(30, (banner_h - total_h) // 2)
         
         # Draw headline lines with yellow highlight
         highlight_pad_x = 14
@@ -367,54 +380,51 @@ class ImageProcessor:
                 draw.text((margin, y), line, font=font_s, fill=sub_color)
                 y += sub_line_h
     
-    def _draw_brand(self, draw, canvas_w, canvas_h, brand_name, color):
-        """Draw brand name in bottom-left with semi-transparent backdrop."""
+    def _draw_brand_strip(self, draw, brand_name: str, canvas_w: int, brand_h: int, color):
+        """Draw brand name centered in the top dark strip."""
         try:
-            font = self._load_font(36, bold=True)
-            margin = 40
-            text = brand_name
+            font = self._load_font(32, bold=True)
             try:
-                bbox = draw.textbbox((0, 0), text, font=font)
+                bbox = draw.textbbox((0, 0), brand_name, font=font)
                 tw = bbox[2] - bbox[0]
                 th = bbox[3] - bbox[1]
+                ascent = -bbox[1]
             except AttributeError:
-                tw, th = draw.textsize(text, font=font)
-            
-            x = margin
-            y = canvas_h - margin - th - 10
-            
-            # White backdrop strip with rounded corners
-            pad = 14
-            draw.rectangle(
-                (x - pad, y - pad, x + tw + pad, y + th + pad),
-                fill=(255, 255, 255, 230)
-            )
-            draw.text((x, y), text, font=font, fill=color)
+                tw, th = draw.textsize(brand_name, font=font)
+                ascent = 0
+            x = (canvas_w - tw) // 2
+            y = (brand_h - th) // 2 - ascent // 2
+            # Small accent dot before name
+            dot_r = 6
+            dot_x = x - 22
+            dot_y = y + th // 2
+            draw.ellipse((dot_x - dot_r, dot_y - dot_r, dot_x + dot_r, dot_y + dot_r), fill=color)
+            draw.text((x, y), brand_name, font=font, fill=color)
         except Exception as e:
-            print(f"   Brand draw error: {e}")
+            print(f"   Brand strip error: {e}")
     
-    def _draw_vertical_source(self, canvas: Image.Image, source_name: str,
-                               banner_h: int, canvas_h: int, canvas_w: int):
-        """Draw vertical source/date text on the right edge of the image area."""
+    def _draw_credit_strip(self, draw, source_name: str, canvas_w: int,
+                            strip_top: int, strip_h: int, color):
+        """Draw source credit + date in the thin strip between headline and image."""
         try:
-            font = self._load_font(20, bold=False)
-            date_str = datetime.now().strftime("%d %b %Y")
-            text = f"Source: {source_name[:40]}  |  {date_str}  |  Public Domain"
+            font = self._load_font(18, bold=False)
+            date_str = datetime.now().strftime("%d %B %Y")
+            left_text = f"SOURCE  \u2022  {source_name[:50]}"
+            right_text = f"{date_str}  \u2022  PUBLIC DOMAIN"
+            margin = 40
             
-            # Render text on a transparent strip, then rotate 90° clockwise (270 = read top-down)
-            tmp_w = canvas_h - banner_h - 80  # Length of text strip
-            tmp_h = 32
-            strip = Image.new('RGBA', (tmp_w, tmp_h), (0, 0, 0, 0))
-            sd = ImageDraw.Draw(strip)
-            sd.text((0, 4), text, font=font, fill=(255, 255, 255, 230))
+            try:
+                lb = draw.textbbox((0, 0), left_text, font=font)
+                lw = lb[2] - lb[0]
+                lh = lb[3] - lb[1]
+                rb = draw.textbbox((0, 0), right_text, font=font)
+                rw = rb[2] - rb[0]
+            except AttributeError:
+                lw, lh = draw.textsize(left_text, font=font)
+                rw, _ = draw.textsize(right_text, font=font)
             
-            # Rotate so it reads top-to-bottom on the right edge
-            rotated = strip.rotate(270, expand=True)
-            rw, rh = rotated.size
-            
-            # Position on right edge of image area
-            x = canvas_w - rh - 12
-            y = banner_h + 40
-            canvas.paste(rotated, (x, y), rotated)
+            y = strip_top + (strip_h - lh) // 2 - 2
+            draw.text((margin, y), left_text, font=font, fill=color)
+            draw.text((canvas_w - margin - rw, y), right_text, font=font, fill=color)
         except Exception as e:
             print(f"   Vertical source draw error: {e}")

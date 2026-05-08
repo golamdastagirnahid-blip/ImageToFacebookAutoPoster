@@ -114,9 +114,12 @@ jobs:
           BLOCK_ON_MEDIUM_RISK: "true"
           # Headline card style (magazine poster with yellow-highlighted headline)
           ENABLE_HEADLINE_CARD: "true"
-          BRAND_NAME: ${{ secrets.BRAND_NAME || 'Vintage Archives' }}
+          BRAND_NAME: ${{ secrets.BRAND_NAME || 'The Time Capsule Archive' }}
           ENABLE_WATERMARK: "true"
           ENABLE_ENHANCE: "true"
+          # Telegram notifications (optional - if set, sends post summaries + alerts)
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           cd src
           python automation.py

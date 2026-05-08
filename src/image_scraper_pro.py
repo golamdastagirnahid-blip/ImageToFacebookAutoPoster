@@ -515,20 +515,50 @@ class ImageScraperPro:
         return valid_images
     
     def rank_images(self, images: List[Dict]) -> List[Dict]:
-        """Rank images by quality score and other factors"""
+        """Rank images by quality score AND metadata richness for better captions"""
         for img in images:
             score = img.get('quality', {}).get('quality_score', 50)
             
-            # Boost score for images with good metadata
-            if img.get('alt_text') and len(img.get('alt_text', '')) > 10:
-                score += 10
-            
-            if img.get('title') and len(img.get('title', '')) > 10:
-                score += 10
-            
-            # Boost for certain sources
-            if 'Metropolitan' in img.get('source', ''):
+            # METADATA RICHNESS BOOST (critical for educational captions)
+            # Strong descriptions = much better AI output
+            desc = img.get('description') or img.get('alt_text') or ''
+            if isinstance(desc, list):
+                desc = ' '.join(str(d) for d in desc)
+            if len(str(desc)) > 200:
+                score += 25  # Rich description
+            elif len(str(desc)) > 50:
+                score += 12
+            elif len(str(desc)) > 10:
                 score += 5
+            
+            # Title quality (skip generic collection titles)
+            title = str(img.get('title', ''))
+            generic_phrases = ['medium: all', 'collections —', 'untitled', 'unknown']
+            is_generic = any(g in title.lower() for g in generic_phrases)
+            if title and len(title) > 15 and not is_generic:
+                score += 15
+            elif is_generic:
+                score -= 20  # Penalize generic catalog titles
+            
+            # Creator/artist info available
+            if img.get('creator'):
+                score += 10
+            
+            # Date info available
+            if img.get('date'):
+                score += 8
+            
+            # Subject tags available
+            subj = img.get('subject') or img.get('tags')
+            if subj and (isinstance(subj, list) and len(subj) > 0 or isinstance(subj, str) and len(subj) > 0):
+                score += 8
+            
+            # Source preference - archive.org items have richer metadata
+            if 'archive.org' in str(img.get('parent_link', '')):
+                score += 10
+            
+            # Add small randomness so ties are broken randomly (variety)
+            score += random.uniform(0, 3)
             
             img['final_score'] = score
         

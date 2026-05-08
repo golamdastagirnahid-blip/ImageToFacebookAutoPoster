@@ -8,8 +8,11 @@ load_dotenv()
 class OpenRouterClient:
     def __init__(self):
         self.api_key = os.getenv('OPENROUTER_API_KEY')
-        self.model = os.getenv('OPENROUTER_MODEL', 'mistralai/mistral-7b-instruct:free')
+        # Use env var only if non-empty, else fall back to known free model
+        env_model = os.getenv('OPENROUTER_MODEL', '').strip()
+        self.model = env_model if env_model else 'meta-llama/llama-3.3-70b-instruct:free'
         self.base_url = "https://openrouter.ai/api/v1"
+        print(f"OpenRouter model: {self.model}")
         
     def generate_description(self, image_context: str) -> Dict[str, str]:
         """Generate image description and hashtags using OpenRouter"""

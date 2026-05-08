@@ -26,6 +26,11 @@ on:
 permissions:
   contents: write  # Required to commit posted-images database back
 
+# Prevent concurrent runs from racing on the SQLite database
+concurrency:
+  group: auto-post-fb
+  cancel-in-progress: false
+
 jobs:
   post-image:
     runs-on: ubuntu-latest
@@ -114,11 +119,33 @@ jobs:
           if [ -f src/image_database.db ]; then cp src/image_database.db data/; fi
           if [ -f src/nsfw_detector.db ]; then cp src/nsfw_detector.db data/; fi
       
-      - name: Commit updated database
+      - name: Publish status to Job Summary
+        if: always()
+        run: |
+          if [ -f STATUS.md ]; then
+            cat STATUS.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ⚠️ No status report generated" >> $GITHUB_STEP_SUMMARY
+            echo "The automation may have failed before logging." >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Commit updated database & status
         if: always()
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add data/image_database.db data/nsfw_detector.db 2>/dev/null || true
-          git diff --staged --quiet || git commit -m "Update posted-images database [skip ci]"
-          git push || echo "Nothing to push"
+          # Pull latest to avoid push conflicts when runs overlap
+          git pull --rebase --autostash origin master || true
+          git add data/image_database.db data/nsfw_detector.db data/runs.jsonl STATUS.md 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "Update database & status [skip ci]"
+          # Retry push up to 3 times in case of concurrent commits
+          for i in 1 2 3; do
+            if git push; then
+              echo "✅ Pushed on attempt $i"
+              break
+            else
+              echo "⚠️ Push failed, attempt $i/3 - rebasing and retrying..."
+              git pull --rebase --autostash origin master || true
+              sleep 5
+            fi
+          done

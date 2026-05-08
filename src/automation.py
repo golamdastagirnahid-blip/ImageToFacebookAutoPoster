@@ -8,6 +8,8 @@ from image_scraper import ImageScraper
 from image_scraper_pro import ImageScraperPro
 from openrouter_client import OpenRouterClient
 from facebook_poster import FacebookPoster
+from image_processor import ImageProcessor
+from health_report import HealthReporter
 
 # Optional NSFW detector
 try:
@@ -31,10 +33,18 @@ class ImageAutomation:
             
         self.openrouter = OpenRouterClient()
         self.facebook = FacebookPoster()
+        # Image post-processor (FB-optimal sizing + watermark + enhancement)
+        self.processor = ImageProcessor(
+            enable_watermark=os.getenv('ENABLE_WATERMARK', 'true').lower() == 'true',
+            watermark_text=os.getenv('WATERMARK_TEXT', 'Public Domain Archives'),
+            enable_enhance=os.getenv('ENABLE_ENHANCE', 'true').lower() == 'true',
+        )
         
         # NSFW & content safety
         self.nsfw_detector = StrictNSFWDetector() if NSFW_AVAILABLE else None
         self.fb_compliance = FacebookPolicyCompliance() if NSFW_AVAILABLE else None
+        # Health reporter (logs every run, generates STATUS.md)
+        self.health = HealthReporter()
         
         # Configuration
         self.min_interval = int(os.getenv('MIN_POST_INTERVAL_HOURS', '4') or '4')
@@ -346,10 +356,20 @@ class ImageAutomation:
         caption = self.generate_caption(images[0], ai_content)
         print(f"\nCaption preview:\n{caption[:200]}...")
         
+        # Post-process the image for Facebook (resize, watermark, enhance, optimize)
+        print("\n🎨 Post-processing image for Facebook...")
+        try:
+            source_credit = images[0].get('source', 'Public Domain Archives')
+            self.processor.watermark_text = source_credit
+            processed_path = self.processor.process(downloaded_paths[0], source_name=source_credit)
+            downloaded_paths[0] = processed_path
+        except Exception as e:
+            print(f"   Processing failed (using original): {e}")
+        
         # Post to Facebook (use single image for reliability)
         print("\nPosting to Facebook...")
-        # Post first image with caption (most reliable approach - URL first, file fallback)
-        first_image_url = images[0].get('url')
+        # Use the LOCAL processed file (not URL) so watermark/enhancements are preserved
+        first_image_url = None  # Force file upload of processed image
         
         # Pre-mark as posted BEFORE FB call - prevents reposts even if response parsing fails
         # If FB actually fails, we accept losing this one item (50,000+ available)
@@ -364,8 +384,28 @@ class ImageAutomation:
         
         if 'error' not in result:
             print("✅ Post successful!")
+            try:
+                self.health.log_run('success', {
+                    'title': ai_content.get('title', 'unknown'),
+                    'source': images[0].get('source', 'unknown'),
+                    'image_size': f"{images[0].get('width', 0)}x{images[0].get('height', 0)}",
+                    'post_id': result.get('post_id') or result.get('id', 'unknown'),
+                    'identifier': images[0].get('identifier', ''),
+                })
+                self.health.generate_status_md()
+            except Exception as e:
+                print(f"Health log error: {e}")
         else:
             print("❌ Post failed - but image is marked as attempted to prevent retry loop")
+            try:
+                self.health.log_run('failure', {
+                    'error': str(result.get('error', 'unknown'))[:200],
+                    'stage': 'facebook_post',
+                    'title': ai_content.get('title', 'unknown'),
+                })
+                self.health.generate_status_md()
+            except Exception:
+                pass
         
         # Cleanup downloaded images
         for path in downloaded_paths:

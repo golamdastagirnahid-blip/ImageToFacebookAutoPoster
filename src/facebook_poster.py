@@ -115,7 +115,51 @@ class FacebookPoster:
             response = requests.get(test_url, params=params, timeout=10)
             response.raise_for_status()
             print("Facebook API connection successful!")
+            # Also check token expiry
+            self.check_token_expiry()
             return True
         except Exception as e:
             print(f"Facebook API connection failed: {e}")
             return False
+    
+    def check_token_expiry(self) -> dict:
+        """Check when the FB access token expires and warn if soon."""
+        try:
+            from datetime import datetime
+            url = f"{self.base_url}/debug_token"
+            params = {
+                'input_token': self.access_token,
+                'access_token': self.access_token
+            }
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json().get('data', {})
+            expires_at = data.get('expires_at', 0)
+            
+            if expires_at == 0:
+                print("✅ Token is long-lived (never expires)")
+                return {'expires_at': 0, 'days_remaining': -1, 'never_expires': True}
+            
+            now = int(datetime.now().timestamp())
+            days_left = (expires_at - now) / 86400
+            
+            if days_left < 7:
+                print(f"🚨 CRITICAL: FB token expires in {days_left:.1f} DAYS!")
+                print("   → Renew immediately at: https://developers.facebook.com/tools/explorer/")
+            elif days_left < 14:
+                print(f"⚠️  WARNING: FB token expires in {days_left:.1f} days. Renew soon.")
+            elif days_left < 30:
+                print(f"ℹ️  FB token expires in {days_left:.1f} days.")
+            else:
+                print(f"✅ FB token valid for {days_left:.0f} more days")
+            
+            return {
+                'expires_at': expires_at,
+                'days_remaining': days_left,
+                'never_expires': False,
+                'critical': days_left < 7,
+                'warning': days_left < 14
+            }
+        except Exception as e:
+            print(f"Token expiry check failed (non-fatal): {e}")
+            return {'error': str(e)}

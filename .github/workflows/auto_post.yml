@@ -77,6 +77,7 @@ jobs:
           echo "Random delay PAUSED for testing - posting immediately"
       
       - name: Run automation
+        continue-on-error: true  # Don't fail workflow - DB commit must still run
         env:
           FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}

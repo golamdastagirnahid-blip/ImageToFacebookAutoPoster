@@ -85,6 +85,21 @@ class ImageScraperPro:
         conn.close()
         return posted
     
+    def get_source_post_counts(self) -> Dict[str, int]:
+        """Return how many posts came from each source (for rotation)"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT source, SUM(post_count) FROM images WHERE post_count > 0 GROUP BY source"
+            )
+            counts = {row[0]: row[1] or 0 for row in cursor.fetchall()}
+            conn.close()
+            return counts
+        except Exception as e:
+            print(f"Source count query error: {e}")
+            return {}
+    
     def _is_duplicate(self, url: str, identifier: str = None, content_hash: str = None) -> bool:
         """Check if image was already posted using multiple signals"""
         # Layer 1: URL match

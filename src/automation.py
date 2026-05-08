@@ -1,4 +1,5 @@
 import os
+import sys
 import random
 import time
 from datetime import datetime, timedelta
@@ -118,9 +119,28 @@ class ImageAutomation:
         print("Fetching images from archives...")
         num_images = random.randint(1, self.max_images_per_post)
         
-        # Shuffle sources so different archive is prioritized each run
-        shuffled_sources = self.sources.copy()
-        random.shuffle(shuffled_sources)
+        # Source rotation: prioritize sources with FEWEST posts so far (fair coverage)
+        # Falls back to random shuffle if pro scraper unavailable
+        if self.is_pro:
+            try:
+                src_counts = self.scraper.get_source_post_counts()
+                # Build (count, jitter, source) tuples for stable but varied ordering
+                weighted = []
+                for src in self.sources:
+                    src_name = self.scraper.get_archive_name(src) if hasattr(self.scraper, 'get_archive_name') else src
+                    count = src_counts.get(src_name, 0)
+                    weighted.append((count, random.random(), src))
+                weighted.sort()  # Lowest count first; jitter breaks ties
+                shuffled_sources = [s for _, _, s in weighted]
+                print(f"Source rotation (post counts): {[(c, s.split('/')[-1][:25]) for c, _, s in weighted]}")
+            except Exception as e:
+                print(f"Source rotation failed, using random: {e}")
+                shuffled_sources = self.sources.copy()
+                random.shuffle(shuffled_sources)
+        else:
+            shuffled_sources = self.sources.copy()
+            random.shuffle(shuffled_sources)
+        
         print(f"Source order this run: {[s.split('/')[-1][:30] for s in shuffled_sources]}")
         
         if self.is_pro:
@@ -398,22 +418,73 @@ class ImageAutomation:
                 time.sleep(3600)
 
 def main():
-    """Main entry point"""
-    automation = ImageAutomation()
+    """Main entry point with self-healing retry logic"""
+    import traceback
     
-    # Test Facebook connection first
-    print("Testing Facebook API connection...")
-    if not automation.facebook.test_connection():
-        print("❌ Facebook connection failed. Please check your credentials.")
-        return
+    max_attempts = 3
+    last_exception = None
     
-    # Run single post for GitHub Actions
-    if os.getenv('GITHUB_ACTIONS'):
-        print("Running in GitHub Actions mode - single post")
-        automation.run_single_post()
-    else:
-        # Run continuous mode locally
-        automation.run_continuous()
+    for attempt in range(1, max_attempts + 1):
+        try:
+            print(f"\n{'='*60}")
+            print(f"🤖 Automation attempt {attempt}/{max_attempts}")
+            print(f"{'='*60}\n")
+            
+            # Self-heal: ensure cache directory exists
+            os.makedirs('image_cache', exist_ok=True)
+            
+            automation = ImageAutomation()
+            
+            # Test Facebook connection (retry on transient failure)
+            print("Testing Facebook API connection...")
+            fb_ok = False
+            for fb_attempt in range(3):
+                try:
+                    if automation.facebook.test_connection():
+                        fb_ok = True
+                        break
+                    print(f"  Facebook test failed, retrying in 5s... ({fb_attempt+1}/3)")
+                    time.sleep(5)
+                except Exception as e:
+                    print(f"  Facebook test exception: {e}")
+                    time.sleep(5)
+            
+            if not fb_ok:
+                print("❌ Facebook connection failed after 3 attempts.")
+                if attempt < max_attempts:
+                    print(f"Will retry full cycle in 30s...")
+                    time.sleep(30)
+                    continue
+                return
+            
+            # Execute the cycle
+            if os.getenv('GITHUB_ACTIONS'):
+                print("Running in GitHub Actions mode - single post")
+                automation.run_single_post()
+            else:
+                automation.run_continuous()
+            
+            # Success - exit
+            print("\n✅ Automation completed successfully")
+            return
+            
+        except KeyboardInterrupt:
+            print("\n\nAutomation stopped by user.")
+            return
+        except Exception as e:
+            last_exception = e
+            print(f"\n❌ Attempt {attempt} failed: {type(e).__name__}: {e}")
+            traceback.print_exc()
+            if attempt < max_attempts:
+                wait = 30 * attempt  # Backoff: 30s, 60s, 90s
+                print(f"\n🔄 Self-recovery: waiting {wait}s before retry...")
+                time.sleep(wait)
+            else:
+                print(f"\n💀 All {max_attempts} attempts exhausted. Final error:")
+                traceback.print_exc()
+                # Exit with non-zero so GitHub Actions marks as failed
+                sys.exit(1)
 
 if __name__ == "__main__":
+    import sys
     main()

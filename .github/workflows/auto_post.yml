@@ -88,10 +88,15 @@ jobs:
           CREDIT_TEXT: ${{ secrets.CREDIT_TEXT }}
           DISCLAIMER_TEXT: ${{ secrets.DISCLAIMER_TEXT }}
           GITHUB_ACTIONS: "true"
-          MIN_IMAGE_WIDTH: "600"
-          MIN_IMAGE_HEIGHT: "400"
-          MIN_IMAGE_SIZE_KB: "30"
-          MAX_IMAGE_SIZE_MB: "20"
+          # Scrape-time validation is on archive.org THUMBNAILS (always ~180px)
+          # Real quality check happens later on the downloaded high-res image
+          MIN_IMAGE_WIDTH: "100"
+          MIN_IMAGE_HEIGHT: "100"
+          MIN_IMAGE_SIZE_KB: "1"
+          MAX_IMAGE_SIZE_MB: "30"
+          # High-res quality enforced in automation.py (600x400 minimum)
+          MIN_HIRES_WIDTH: "600"
+          MIN_HIRES_HEIGHT: "400"
           MAX_IMAGES_PER_POST: "1"
           MAX_PAGES_PER_SOURCE: "1"
           NSFW_STRICT_MODE: "true"

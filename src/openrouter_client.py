@@ -10,13 +10,17 @@ class OpenRouterClient:
         self.api_key = os.getenv('OPENROUTER_API_KEY')
         # Build a fallback chain of free models (used in order if rate-limited)
         env_model = os.getenv('OPENROUTER_MODEL', '').strip()
+        # Verified working free models on OpenRouter (as of 2025)
         self.fallback_models = [
             env_model if env_model else None,
             'meta-llama/llama-3.3-70b-instruct:free',
-            'google/gemini-2.0-flash-exp:free',
             'deepseek/deepseek-chat-v3-0324:free',
-            'qwen/qwen-2.5-72b-instruct:free',
+            'deepseek/deepseek-r1:free',
+            'qwen/qwen3-235b-a22b:free',
+            'meta-llama/llama-3.2-3b-instruct:free',
             'mistralai/mistral-7b-instruct:free',
+            'google/gemma-2-9b-it:free',
+            'microsoft/phi-3-mini-128k-instruct:free',
         ]
         # Remove None and duplicates while preserving order
         seen = set()
@@ -93,26 +97,33 @@ Rules:
                     timeout=45
                 )
                 
-                # If rate-limited or server error, try next model
-                if response.status_code in (429, 502, 503):
+                # If rate-limited, not found, or server error, try next model
+                if response.status_code in (400, 402, 404, 408, 429, 500, 502, 503, 504):
                     print(f"  Model {attempt_model} returned {response.status_code}, trying next...")
                     last_error = f"HTTP {response.status_code}"
                     continue
                 
                 response.raise_for_status()
                 result = response.json()
+                # Check if response has expected structure
+                if 'choices' not in result or not result['choices']:
+                    print(f"  {attempt_model} returned unexpected structure, trying next...")
+                    continue
                 content = result['choices'][0]['message']['content']
+                if not content or len(content) < 50:
+                    print(f"  {attempt_model} returned empty/short response, trying next...")
+                    continue
                 print(f"✅ Got response from: {attempt_model}")
                 return self._parse_response(content)
                 
             except requests.exceptions.HTTPError as e:
                 code = e.response.status_code if e.response is not None else 0
-                if code in (429, 502, 503):
-                    print(f"  {attempt_model} rate-limited/unavailable, trying next...")
+                if code in (400, 402, 404, 408, 429, 500, 502, 503, 504):
+                    print(f"  {attempt_model} HTTP {code}, trying next...")
                     last_error = e
                     continue
                 last_error = e
-                break
+                continue
             except Exception as e:
                 last_error = e
                 print(f"  Error with {attempt_model}: {e}")

@@ -114,12 +114,61 @@ class ImageScraperPro:
         else:
             return 'Internet Archive'
     
+    def _is_text_image(self, img: Image) -> bool:
+        """Detect if image is primarily text (book pages, documents, etc.)
+        Text images typically have:
+        - Very low color variance (mostly black/white)
+        - High contrast with sharp edges
+        - Predominantly grayscale
+        """
+        try:
+            # Resize for faster analysis
+            small = img.copy()
+            small.thumbnail((200, 200))
+            
+            # Convert to RGB if needed
+            if small.mode != 'RGB':
+                small = small.convert('RGB')
+            
+            # Sample pixels and analyze color distribution
+            pixels = list(small.getdata())
+            total = len(pixels)
+            if total == 0:
+                return False
+            
+            # Count "text-like" pixels: very dark or very light
+            text_pixels = 0
+            color_pixels = 0
+            for r, g, b in pixels:
+                avg = (r + g + b) / 3
+                # Very dark or very light (text characteristic)
+                if avg < 50 or avg > 220:
+                    text_pixels += 1
+                # Has significant color (non-grayscale)
+                max_diff = max(abs(r-g), abs(g-b), abs(r-b))
+                if max_diff > 30:
+                    color_pixels += 1
+            
+            text_ratio = text_pixels / total
+            color_ratio = color_pixels / total
+            
+            # Text image: high text-pixel ratio AND low color variation
+            is_text = text_ratio > 0.75 and color_ratio < 0.10
+            return is_text
+            
+        except Exception:
+            return False
+    
     def _check_image_quality(self, image_data: bytes) -> Dict:
         """Analyze image quality and return metrics"""
         try:
             img = Image.open(BytesIO(image_data))
             width, height = img.size
             file_size = len(image_data)
+            
+            # Filter out text-only images (book pages, documents)
+            if self._is_text_image(img):
+                return {'valid': False, 'reason': 'text_image', 'width': width, 'height': height}
             
             # Calculate quality score (0-100)
             score = 0
@@ -176,28 +225,95 @@ class ImageScraperPro:
                     return None
     
     def scrape_archive_org_paginated(self, base_url: str, max_pages: int = 10, max_images: int = 100) -> List[Dict]:
-        """Scrape multiple pages from archive.org"""
+        """Scrape thousands of images from archive.org using their official API"""
         all_images = []
         
+        # Extract collection identifier from URL
+        # e.g., https://archive.org/details/david-rumsey-map-collection?page=3 -> david-rumsey-map-collection
+        collection = self._extract_collection_id(base_url)
+        if not collection:
+            print(f"Could not extract collection from: {base_url}")
+            return []
+        
+        print(f"Using archive.org API for collection: {collection}")
+        archive_name = self._get_archive_name(base_url)
+        
+        # Archive.org search API - returns up to 10,000 items
+        rows_per_page = 100
         for page in range(1, max_pages + 1):
-            page_url = f"{base_url}&page={page}" if '?' in base_url else f"{base_url}?page={page}"
+            search_url = (
+                f"https://archive.org/advancedsearch.php"
+                f"?q=collection%3A{collection}+AND+mediatype%3A%28image+OR+texts%29"
+                f"&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=description"
+                f"&sort%5B%5D=random"
+                f"&rows={rows_per_page}&page={page}&output=json"
+            )
             
-            print(f"Scraping page {page}/{max_pages}: {page_url}")
-            images = self._scrape_archive_page(page_url)
-            
-            if not images:
-                print(f"No images found on page {page}, stopping pagination")
+            print(f"Fetching page {page}/{max_pages} from archive.org API")
+            try:
+                response = self._fetch_with_retry(search_url)
+                if not response:
+                    break
+                
+                data = response.json()
+                docs = data.get('response', {}).get('docs', [])
+                
+                if not docs:
+                    print(f"No more items on page {page}")
+                    break
+                
+                for doc in docs:
+                    identifier = doc.get('identifier')
+                    if not identifier:
+                        continue
+                    
+                    # Get the main image for this item
+                    # Archive.org provides a thumbnail at: https://archive.org/services/img/<identifier>
+                    # And full file via metadata API
+                    item_image_url = self._get_archive_item_image(identifier)
+                    if not item_image_url:
+                        continue
+                    
+                    # Skip if duplicate
+                    if self._is_duplicate(item_image_url):
+                        continue
+                    
+                    all_images.append({
+                        'url': item_image_url,
+                        'source': archive_name,
+                        'alt_text': doc.get('description', '')[:200] if doc.get('description') else '',
+                        'title': doc.get('title', identifier),
+                        'parent_link': f"https://archive.org/details/{identifier}",
+                        'identifier': identifier
+                    })
+                    
+                    if len(all_images) >= max_images:
+                        return all_images
+                
+                time.sleep(random.uniform(1, 3))
+                
+            except Exception as e:
+                print(f"Error fetching archive.org page {page}: {e}")
                 break
-            
-            all_images.extend(images)
-            
-            if len(all_images) >= max_images:
-                break
-            
-            # Human-like delay between pages
-            time.sleep(random.uniform(2, 5))
         
         return all_images[:max_images]
+    
+    def _extract_collection_id(self, url: str) -> Optional[str]:
+        """Extract collection identifier from archive.org URL"""
+        try:
+            # Match https://archive.org/details/<collection>?...
+            match = re.search(r'archive\.org/details/([^/?&]+)', url)
+            if match:
+                return match.group(1)
+        except:
+            pass
+        return None
+    
+    def _get_archive_item_image(self, identifier: str) -> Optional[str]:
+        """Get main image URL for an archive.org item"""
+        # Archive.org provides a service for item images
+        # Use the high-quality thumbnail service which always works
+        return f"https://archive.org/services/img/{identifier}"
     
     def _scrape_archive_page(self, url: str) -> List[Dict]:
         """Scrape single archive.org page"""
@@ -399,8 +515,8 @@ class ImageScraperPro:
             print(f"\nProcessing source: {source}")
             
             if 'archive.org' in source:
-                # Paginated scraping
-                images = self.scrape_archive_org_paginated(source, max_pages=max_pages_per_source, max_images=50)
+                # Use archive.org API - access thousands of images per collection
+                images = self.scrape_archive_org_paginated(source, max_pages=max_pages_per_source, max_images=200)
             elif 'publicdomainreview.org' in source:
                 images = self._scrape_archive_page(source)
             else:

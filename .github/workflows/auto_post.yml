@@ -4,7 +4,16 @@ on:
   schedule:
     # Run every 6 hours (adjust as needed)
     - cron: '0 */6 * * *'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+    inputs:
+      mode:
+        description: 'Run mode'
+        required: false
+        default: 'enterprise'
+        type: choice
+        options:
+          - basic
+          - enterprise
 
 jobs:
   post-image:

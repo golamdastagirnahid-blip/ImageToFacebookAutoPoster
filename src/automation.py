@@ -8,6 +8,14 @@ from image_scraper_pro import ImageScraperPro
 from openrouter_client import OpenRouterClient
 from facebook_poster import FacebookPoster
 
+# Optional NSFW detector
+try:
+    from nsfw_detector import StrictNSFWDetector, FacebookPolicyCompliance
+    NSFW_AVAILABLE = True
+except Exception as e:
+    print(f"NSFW detector not available: {e}")
+    NSFW_AVAILABLE = False
+
 load_dotenv()
 
 class ImageAutomation:
@@ -22,6 +30,10 @@ class ImageAutomation:
             
         self.openrouter = OpenRouterClient()
         self.facebook = FacebookPoster()
+        
+        # NSFW & content safety
+        self.nsfw_detector = StrictNSFWDetector() if NSFW_AVAILABLE else None
+        self.fb_compliance = FacebookPolicyCompliance() if NSFW_AVAILABLE else None
         
         # Configuration
         self.min_interval = int(os.getenv('MIN_POST_INTERVAL_HOURS', '4') or '4')
@@ -106,10 +118,15 @@ class ImageAutomation:
         print("Fetching images from archives...")
         num_images = random.randint(1, self.max_images_per_post)
         
+        # Shuffle sources so different archive is prioritized each run
+        shuffled_sources = self.sources.copy()
+        random.shuffle(shuffled_sources)
+        print(f"Source order this run: {[s.split('/')[-1][:30] for s in shuffled_sources]}")
+        
         if self.is_pro:
             # Use pro scraper with smart selection
             images = self.scraper.smart_image_selection(
-                self.sources, 
+                shuffled_sources,
                 count=num_images,
                 max_pages_per_source=self.max_pages_per_source
             )
@@ -150,6 +167,42 @@ class ImageAutomation:
         if not downloaded_paths:
             print("Failed to download any images. Skipping this cycle.")
             return
+        
+        # Fetch FULL metadata from archive.org for richer content
+        if self.is_pro and images[0].get('identifier'):
+            print("\n📚 Fetching full metadata from archive.org...")
+            full_meta = self.scraper.fetch_full_metadata(images[0]['identifier'])
+            if full_meta.get('metadata'):
+                meta = full_meta['metadata']
+                # Merge richer metadata fields
+                for key in ['description', 'creator', 'date', 'subject', 'publisher',
+                            'language', 'source', 'rights', 'coverage', 'contributor',
+                            'notes', 'references', 'uploader']:
+                    if meta.get(key) and not images[0].get(key):
+                        images[0][key] = meta[key]
+                # Update description if richer one available
+                if meta.get('description'):
+                    images[0]['description'] = meta['description']
+                print(f"✅ Retrieved extended metadata ({len(meta)} fields)")
+        
+        # Apply NSFW detection on the downloaded image
+        if self.nsfw_detector:
+            print("\n🔒 Running NSFW safety check...")
+            try:
+                nsfw_info = dict(images[0])
+                nsfw_info['local_path'] = downloaded_paths[0]
+                nsfw_result = self.nsfw_detector.detect_nsfw(nsfw_info)
+                if nsfw_result.get('blocked') or nsfw_result.get('overall_level') in ('high_risk', 'blocked'):
+                    print(f"⛔ NSFW content detected - blocking post: {nsfw_result.get('reason', 'unknown')}")
+                    for p in downloaded_paths:
+                        try:
+                            os.remove(p)
+                        except Exception:
+                            pass
+                    return
+                print(f"✅ NSFW check passed (level: {nsfw_result.get('overall_level', 'safe')})")
+            except Exception as e:
+                print(f"NSFW check error (continuing): {e}")
         
         # Generate AI content for the first image using FULL metadata
         print("\nGenerating description and hashtags...")

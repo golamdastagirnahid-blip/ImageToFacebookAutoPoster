@@ -238,20 +238,33 @@ class ImageScraperPro:
         print(f"Using archive.org API for collection: {collection}")
         archive_name = self._get_archive_name(base_url)
         
+        # First, get total item count so we can pick a random page range
+        total_items = self._get_collection_size(collection)
+        print(f"Collection has ~{total_items} total items")
+        
         # Archive.org search API - returns up to 10,000 items per query
         rows_per_page = 100
-        for page in range(1, max_pages + 1):
+        max_available_pages = max(1, min(100, total_items // rows_per_page))
+        
+        # Pick RANDOM starting page so we sample different items each run
+        start_page = random.randint(1, max_available_pages) if max_available_pages > 1 else 1
+        print(f"Starting from random page {start_page} of {max_available_pages}")
+        
+        for offset in range(max_pages):
+            page = ((start_page - 1 + offset) % max_available_pages) + 1
+            # Use random sort seed that changes each run
+            random_seed = random.randint(1, 999999)
             search_url = (
                 f"https://archive.org/advancedsearch.php"
                 f"?q=collection%3A{collection}+AND+mediatype%3Aimage"
                 f"&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=description"
                 f"&fl%5B%5D=creator&fl%5B%5D=date&fl%5B%5D=subject"
                 f"&fl%5B%5D=publisher&fl%5B%5D=language"
-                f"&sort%5B%5D=random"
+                f"&sort%5B%5D=random+{random_seed}"
                 f"&rows={rows_per_page}&page={page}&output=json"
             )
             
-            print(f"Fetching page {page}/{max_pages} from archive.org API")
+            print(f"Fetching page {page} (seed {random_seed}) from archive.org API")
             try:
                 response = self._fetch_with_retry(search_url)
                 if not response:
@@ -336,6 +349,59 @@ class ImageScraperPro:
         # Archive.org provides a service for item images
         # Use the high-quality thumbnail service which always works
         return f"https://archive.org/services/img/{identifier}"
+    
+    def _get_collection_size(self, collection: str) -> int:
+        """Get approximate total item count in an archive.org collection"""
+        try:
+            url = (
+                f"https://archive.org/advancedsearch.php"
+                f"?q=collection%3A{collection}+AND+mediatype%3Aimage"
+                f"&rows=0&output=json"
+            )
+            response = self._fetch_with_retry(url)
+            if response:
+                data = response.json()
+                return int(data.get('response', {}).get('numFound', 100))
+        except Exception as e:
+            print(f"Could not get collection size: {e}")
+        return 1000  # Default estimate
+    
+    def fetch_full_metadata(self, identifier: str) -> Dict:
+        """Fetch FULL metadata for an archive.org item (much richer than search)"""
+        try:
+            url = f"https://archive.org/metadata/{identifier}"
+            response = self._fetch_with_retry(url)
+            if not response:
+                return {}
+            data = response.json()
+            metadata = data.get('metadata', {})
+            
+            # Find the best image file (high-res original, not thumbnail)
+            files = data.get('files', [])
+            best_image = None
+            best_size = 0
+            for f in files:
+                name = f.get('name', '').lower()
+                fmt = f.get('format', '').lower()
+                if any(name.endswith(ext) for ext in ['.jpg', '.jpeg', '.png']):
+                    # Prefer original over derivatives
+                    if 'original' in f.get('source', '').lower() or fmt in ['jpeg', 'png', 'jp2']:
+                        size = int(f.get('size', 0) or 0)
+                        if size > best_size and size < 20 * 1024 * 1024:  # Under 20MB
+                            best_size = size
+                            best_image = f.get('name')
+            
+            full_image_url = None
+            if best_image:
+                full_image_url = f"https://archive.org/download/{identifier}/{best_image}"
+            
+            return {
+                'metadata': metadata,
+                'full_image_url': full_image_url
+            }
+        except Exception as e:
+            print(f"Error fetching full metadata for {identifier}: {e}")
+            return {}
     
     def _scrape_archive_page(self, url: str) -> List[Dict]:
         """Scrape single archive.org page"""

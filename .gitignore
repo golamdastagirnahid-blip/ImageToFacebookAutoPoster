@@ -41,8 +41,11 @@ downloaded_images/
 temp_images/
 image_cache/
 
-# Database
+# Database - ignore local dev DBs but allow committed data/ dbs for state persistence
 image_database.db
 *.db
 *.sqlite
 *.sqlite3
+!data/*.db
+!data/*.sqlite
+!data/*.sqlite3

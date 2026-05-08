@@ -16,29 +16,43 @@ class OpenRouterClient:
         if not self.api_key:
             raise ValueError("OPENROUTER_API_KEY not set")
         
-        prompt = f"""You are a museum curator and historian writing an educational Facebook post about a historical image.
+        prompt = f"""You are a PROFESSIONAL museum curator, historian, and Facebook social media editor.
+Your job is to write a detailed, engaging, and professional Facebook post about a historical image.
 
-You will receive the FULL metadata of a historical image (title, creator, date, description, subject tags, etc.).
-Read ALL details carefully and write an engaging, informative post that helps people learn about this image.
+Your audience is history enthusiasts who WANT to learn deeply about what they're seeing.
+Be thorough, educational, and captivating - like a museum placard meets a great storyteller.
 
-IMAGE METADATA:
+FULL IMAGE METADATA (from archive.org):
 {image_context}
 
-Write a Facebook post following this EXACT structure:
+Write a Facebook post with this EXACT structure (use these exact labels):
 
-TITLE: [A captivating, short title - max 80 characters - that hooks readers]
+TITLE: [A powerful, specific hook - max 100 characters. No clickbait. Pull the most compelling detail from the metadata.]
 
-DESCRIPTION: [Write 4-6 well-organized sentences in this order:
-1. Open with what the image shows (subject, scene)
-2. Mention the creator/artist and the date/era it's from
-3. Explain the historical context or significance
-4. Include an interesting fact or detail from the metadata
-5. End with why it matters today
-Use storytelling tone, not dry facts. Make it educational but engaging.]
+DESCRIPTION: [Write a DETAILED, professional narrative of 8-14 sentences organized in paragraphs:
 
-HASHTAGS: [8-12 relevant hashtags, comma-separated. Mix general (#history #vintage) with specific ones based on the subject tags, era, location, or creator. Example: #VictorianEra, #1890s, #BlackAndWhitePhotography]
+Paragraph 1 - THE IMAGE: Describe precisely what the image shows - the subject, setting, composition, mood, and any visible details. Help the viewer understand what they're looking at.
 
-Be accurate - only use facts from the metadata. If metadata is sparse, focus on what IS provided. Never invent dates, names, or facts."""
+Paragraph 2 - THE STORY: Weave in ALL available historical context: who created it (name + role), when (exact date or era), where (location), why (purpose), and the broader historical events surrounding it. Use the metadata fully.
+
+Paragraph 3 - THE SIGNIFICANCE: Explain why this image matters. What makes it important? What does it reveal about the era, culture, people, or place? Connect it to larger themes.
+
+Paragraph 4 - FASCINATING DETAIL: Share one compelling, specific fact from the metadata (a quote, unusual detail, technique, or context) that will surprise or move readers.
+
+Use paragraph breaks (blank lines between paragraphs). Be accurate - ONLY use facts from the metadata. If metadata is sparse, focus deeply on what IS provided. Never fabricate dates, names, events, or facts. Write in a warm, professional, educational voice.]
+
+HASHTAGS: [12-18 relevant hashtags, comma-separated. Include a mix:
+- Era/date specific: #1890s #VictorianEra #IndustrialRevolution
+- Subject specific: use the subject tags from metadata
+- Location specific: #London #Paris #NewYork (if mentioned)
+- General: #History #Vintage #HistoricalPhotos #Archives #Heritage
+- Creator/style: #ArtistName #Photography #Painting (based on metadata)]
+
+Rules:
+- Only use facts from the metadata. Never invent.
+- Be specific, not generic.
+- Write professionally but with warmth.
+- Make people want to read every word."""
         
         try:
             response = requests.post(
@@ -53,8 +67,8 @@ Be accurate - only use facts from the metadata. If metadata is sparse, focus on 
                         {'role': 'system', 'content': 'You are a helpful social media content creator.'},
                         {'role': 'user', 'content': prompt}
                     ],
-                    'max_tokens': 800,
-                    'temperature': 0.7
+                    'max_tokens': 1500,
+                    'temperature': 0.75
                 },
                 timeout=30
             )
@@ -78,24 +92,28 @@ Be accurate - only use facts from the metadata. If metadata is sparse, focus on 
             }
     
     def _parse_response(self, content: str) -> Dict[str, str]:
-        """Parse the AI response"""
-        result = {
-            'description': '',
-            'hashtags': '',
-            'title': ''
-        }
+        """Parse the AI response, supporting multi-line DESCRIPTION"""
+        import re
+        result = {'description': '', 'hashtags': '', 'title': ''}
         
-        for line in content.split('\n'):
-            line = line.strip()
-            if line.startswith('DESCRIPTION:'):
-                result['description'] = line.replace('DESCRIPTION:', '').strip()
-            elif line.startswith('HASHTAGS:'):
-                result['hashtags'] = line.replace('HASHTAGS:', '').strip()
-            elif line.startswith('TITLE:'):
-                result['title'] = line.replace('TITLE:', '').strip()
+        # Extract each section using regex that captures until next label or end
+        title_match = re.search(r'TITLE:\s*(.+?)(?=\n\s*(?:DESCRIPTION:|HASHTAGS:)|\Z)', content, re.DOTALL | re.IGNORECASE)
+        desc_match = re.search(r'DESCRIPTION:\s*(.+?)(?=\n\s*(?:HASHTAGS:|TITLE:)|\Z)', content, re.DOTALL | re.IGNORECASE)
+        tags_match = re.search(r'HASHTAGS:\s*(.+?)(?=\n\s*(?:TITLE:|DESCRIPTION:)|\Z)', content, re.DOTALL | re.IGNORECASE)
+        
+        if title_match:
+            result['title'] = title_match.group(1).strip().strip('[]"').strip()
+        if desc_match:
+            result['description'] = desc_match.group(1).strip().strip('[]').strip()
+        if tags_match:
+            tags = tags_match.group(1).strip().strip('[]').strip()
+            # Ensure hashtags have # prefix and are space-separated
+            tag_list = [t.strip() for t in re.split(r'[,\n]', tags) if t.strip()]
+            tag_list = [t if t.startswith('#') else '#' + t.replace(' ', '') for t in tag_list]
+            result['hashtags'] = ' '.join(tag_list)
         
         # Fallback if parsing failed
         if not result['description']:
-            result['description'] = content
+            result['description'] = content.strip()
         
         return result

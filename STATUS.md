@@ -1,6 +1,6 @@
 # 🤖 Auto-Poster Status
 
-_Last updated: 2026-05-08 12:01:41 UTC_
+_Last updated: 2026-05-08 15:03:28 UTC_
 
 ## 🟢 **HEALTHY**
 
@@ -8,12 +8,12 @@ _Last updated: 2026-05-08 12:01:41 UTC_
 
 ## 📊 Statistics
 
-- **Total runs tracked:** 5
-- **Successes:** 5 (100.0%)
+- **Total runs tracked:** 6
+- **Successes:** 6 (100.0%)
 - **Failures:** 0
 - **Skipped:** 0
 - **Consecutive failures:** 0
-- **Posts in last 24h:** 5
+- **Posts in last 24h:** 6
 
 ## 🔐 Facebook Token
 
@@ -21,22 +21,23 @@ _Last updated: 2026-05-08 12:01:41 UTC_
 
 ## ✅ Last Successful Post
 
-- **Time:** 2026-05-08T12:01:41.009814Z
-- **Title:** Discover the Gotha Missal's Hidden Secrets
-- **Source:** Cleveland Museum of Art
-- **Image size:** 7700x5500
-- **Post ID:** 1104960692700888_122094959277317603
+- **Time:** 2026-05-08T15:03:28.524015Z
+- **Title:** Discover the Hidden Secrets of Ancient Rome
+- **Source:** David Rumsey Map Collection
+- **Image size:** 1536x1150
+- **Post ID:** 1104960692700888_122095078833317603
 - **AI model:** unknown
 
 ## 📚 Source Distribution
 
-- **David Rumsey Map Collection:** 3 posts (60.0%)
-- **Cleveland Museum of Art:** 2 posts (40.0%)
+- **David Rumsey Map Collection:** 4 posts (66.7%)
+- **Cleveland Museum of Art:** 2 posts (33.3%)
 
 ## 📜 Recent Runs (last 10)
 
 | Time | Status | Source | Title |
 |------|--------|--------|-------|
+| 2026-05-08 15:03:28 | ✅ | David Rumsey Map Col | Discover the Hidden Secrets of Ancient R |
 | 2026-05-08 12:01:41 | ✅ | Cleveland Museum of  | Discover the Gotha Missal's Hidden Secre |
 | 2026-05-08 08:55:07 | ✅ | David Rumsey Map Col | Discovering Chippewa County's Past |
 | 2026-05-08 08:53:05 | ✅ | Cleveland Museum of  | Discover the Secrets of the Gotha Missal |

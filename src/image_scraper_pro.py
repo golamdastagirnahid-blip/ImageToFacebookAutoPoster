@@ -238,13 +238,15 @@ class ImageScraperPro:
         print(f"Using archive.org API for collection: {collection}")
         archive_name = self._get_archive_name(base_url)
         
-        # Archive.org search API - returns up to 10,000 items
+        # Archive.org search API - returns up to 10,000 items per query
         rows_per_page = 100
         for page in range(1, max_pages + 1):
             search_url = (
                 f"https://archive.org/advancedsearch.php"
-                f"?q=collection%3A{collection}+AND+mediatype%3A%28image+OR+texts%29"
+                f"?q=collection%3A{collection}+AND+mediatype%3Aimage"
                 f"&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=description"
+                f"&fl%5B%5D=creator&fl%5B%5D=date&fl%5B%5D=subject"
+                f"&fl%5B%5D=publisher&fl%5B%5D=language"
                 f"&sort%5B%5D=random"
                 f"&rows={rows_per_page}&page={page}&output=json"
             )
@@ -278,11 +280,31 @@ class ImageScraperPro:
                     if self._is_duplicate(item_image_url):
                         continue
                     
+                    # Extract rich metadata
+                    description = doc.get('description', '')
+                    if isinstance(description, list):
+                        description = ' '.join(description)
+                    
+                    creator = doc.get('creator', '')
+                    if isinstance(creator, list):
+                        creator = ', '.join(creator)
+                    
+                    subject = doc.get('subject', [])
+                    if isinstance(subject, str):
+                        subject = [subject]
+                    
                     all_images.append({
                         'url': item_image_url,
                         'source': archive_name,
-                        'alt_text': doc.get('description', '')[:200] if doc.get('description') else '',
+                        'alt_text': description[:300] if description else '',
                         'title': doc.get('title', identifier),
+                        'description': description,
+                        'creator': creator,
+                        'date': doc.get('date', ''),
+                        'subject': subject,
+                        'tags': subject,
+                        'publisher': doc.get('publisher', ''),
+                        'language': doc.get('language', ''),
                         'parent_link': f"https://archive.org/details/{identifier}",
                         'identifier': identifier
                     })

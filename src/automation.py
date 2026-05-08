@@ -36,29 +36,65 @@ class ImageAutomation:
         self.is_pro = use_pro and os.getenv('USE_PRO_SCRAPER', 'true').lower() == 'true'
         
     def generate_caption(self, image_info: dict, ai_content: dict) -> str:
-        """Generate full caption with description, hashtags, credits, and disclaimer"""
-        caption_parts = []
+        """Generate organized Facebook caption with rich historical metadata"""
+        parts = []
         
-        # Add title if available
+        # Title with emoji
         if ai_content.get('title'):
-            caption_parts.append(f"📌 {ai_content['title']}\n")
+            parts.append(f"📌 {ai_content['title']}")
+            parts.append("")
         
-        # Add AI-generated description
+        # AI-generated educational description
         if ai_content.get('description'):
-            caption_parts.append(f"{ai_content['description']}\n")
+            parts.append(ai_content['description'])
+            parts.append("")
         
-        # Add hashtags
+        # Historical Details section (organized metadata)
+        details = []
+        if image_info.get('creator'):
+            details.append(f"🎨 Creator: {image_info['creator']}")
+        if image_info.get('date'):
+            details.append(f"📅 Date: {image_info['date']}")
+        if image_info.get('publisher'):
+            details.append(f"🏛️ Publisher: {image_info['publisher']}")
+        if image_info.get('language'):
+            lang = image_info['language']
+            if isinstance(lang, list):
+                lang = ', '.join(str(l) for l in lang)
+            details.append(f"🗣️ Language: {lang}")
+        
+        # Subject/tag list
+        subj = image_info.get('subject') or image_info.get('tags')
+        if subj:
+            if isinstance(subj, list):
+                subj_str = ', '.join(str(s) for s in subj[:6])
+            else:
+                subj_str = str(subj)
+            if subj_str:
+                details.append(f"🏷️ Subjects: {subj_str}")
+        
+        if details:
+            parts.append("📜 Historical Details")
+            parts.append("─" * 20)
+            parts.extend(details)
+            parts.append("")
+        
+        # Hashtags
         if ai_content.get('hashtags'):
-            caption_parts.append(f"\n{ai_content['hashtags']}")
+            parts.append(ai_content['hashtags'])
+            parts.append("")
         
-        # Add credits
+        # Source credit
         credit = self.credit_template.format(source=image_info.get('source', 'Unknown'))
-        caption_parts.append(f"\n\n{credit}")
+        parts.append(f"📚 {credit}")
+        if image_info.get('parent_link'):
+            parts.append(f"🔗 View original: {image_info['parent_link']}")
         
-        # Add disclaimer
-        caption_parts.append(f"\n{self.disclaimer_template}")
+        # Disclaimer
+        parts.append("")
+        parts.append(f"ℹ️ {self.disclaimer_template}")
         
-        return '\n'.join(caption_parts)
+        return '\n'.join(parts)
     
     def run_single_post(self):
         """Execute a single post cycle"""
@@ -115,9 +151,38 @@ class ImageAutomation:
             print("Failed to download any images. Skipping this cycle.")
             return
         
-        # Generate AI content for the first image
+        # Generate AI content for the first image using FULL metadata
         print("\nGenerating description and hashtags...")
-        image_context = f"Source: {images[0]['source']}, Title: {images[0].get('title', '')}, Alt: {images[0].get('alt_text', '')}"
+        img = images[0]
+        # Build rich metadata context for AI
+        meta_lines = [f"Archive Source: {img.get('source', 'Unknown')}"]
+        if img.get('title'):
+            meta_lines.append(f"Title: {img['title']}")
+        if img.get('creator'):
+            meta_lines.append(f"Creator/Artist: {img['creator']}")
+        if img.get('date'):
+            meta_lines.append(f"Date: {img['date']}")
+        if img.get('publisher'):
+            meta_lines.append(f"Publisher: {img['publisher']}")
+        if img.get('language'):
+            meta_lines.append(f"Language: {img['language']}")
+        if img.get('subject') or img.get('tags'):
+            tags = img.get('subject') or img.get('tags') or []
+            if isinstance(tags, list):
+                tags_str = ', '.join(str(t) for t in tags[:10])
+            else:
+                tags_str = str(tags)
+            if tags_str:
+                meta_lines.append(f"Subject Tags: {tags_str}")
+        if img.get('description'):
+            meta_lines.append(f"Description: {img['description'][:500]}")
+        if img.get('alt_text') and img.get('alt_text') != img.get('description'):
+            meta_lines.append(f"Alt Text: {img['alt_text'][:200]}")
+        if img.get('parent_link'):
+            meta_lines.append(f"Source Link: {img['parent_link']}")
+        
+        image_context = '\n'.join(meta_lines)
+        print(f"Metadata being sent to AI:\n{image_context}\n")
         ai_content = self.openrouter.generate_description(image_context)
         print(f"Generated: {ai_content['title']}")
         

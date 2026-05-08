@@ -50,6 +50,7 @@ jobs:
           MIN_IMAGE_SIZE_KB: "1"
           MAX_IMAGE_SIZE_MB: "50"
           MAX_IMAGES_PER_POST: "1"
+          MAX_PAGES_PER_SOURCE: "1"
         run: |
           cd src
           python automation.py

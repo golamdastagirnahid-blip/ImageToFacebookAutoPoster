@@ -16,17 +16,29 @@ class OpenRouterClient:
         if not self.api_key:
             raise ValueError("OPENROUTER_API_KEY not set")
         
-        prompt = f"""You are a social media content creator. Based on the following image information, create:
-1. An engaging description (2-3 sentences)
-2. 5-10 relevant hashtags
-3. A short title
+        prompt = f"""You are a museum curator and historian writing an educational Facebook post about a historical image.
 
-Image Context: {image_context}
+You will receive the FULL metadata of a historical image (title, creator, date, description, subject tags, etc.).
+Read ALL details carefully and write an engaging, informative post that helps people learn about this image.
 
-Format your response as:
-DESCRIPTION: [your description]
-HASHTAGS: [comma separated hashtags]
-TITLE: [short title]"""
+IMAGE METADATA:
+{image_context}
+
+Write a Facebook post following this EXACT structure:
+
+TITLE: [A captivating, short title - max 80 characters - that hooks readers]
+
+DESCRIPTION: [Write 4-6 well-organized sentences in this order:
+1. Open with what the image shows (subject, scene)
+2. Mention the creator/artist and the date/era it's from
+3. Explain the historical context or significance
+4. Include an interesting fact or detail from the metadata
+5. End with why it matters today
+Use storytelling tone, not dry facts. Make it educational but engaging.]
+
+HASHTAGS: [8-12 relevant hashtags, comma-separated. Mix general (#history #vintage) with specific ones based on the subject tags, era, location, or creator. Example: #VictorianEra, #1890s, #BlackAndWhitePhotography]
+
+Be accurate - only use facts from the metadata. If metadata is sparse, focus on what IS provided. Never invent dates, names, or facts."""
         
         try:
             response = requests.post(
@@ -41,7 +53,8 @@ TITLE: [short title]"""
                         {'role': 'system', 'content': 'You are a helpful social media content creator.'},
                         {'role': 'user', 'content': prompt}
                     ],
-                    'max_tokens': 500
+                    'max_tokens': 800,
+                    'temperature': 0.7
                 },
                 timeout=30
             )

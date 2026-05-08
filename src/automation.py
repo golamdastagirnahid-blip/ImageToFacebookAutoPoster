@@ -199,7 +199,8 @@ class ImageAutomation:
                 if full_url:
                     print(f"🎨 Found high-res image: {full_url}")
                     # Download high-res version
-                    hires_path, _ = self.scraper.download_image(full_url)
+                    hires_result = self.scraper.download_and_validate_image(full_url)
+                    hires_path = hires_result.get('local_path') if hires_result else None
                     if hires_path and os.path.exists(hires_path):
                         # Verify resolution is acceptable for Facebook
                         try:

@@ -10,6 +10,7 @@ from openrouter_client import OpenRouterClient
 from facebook_poster import FacebookPoster
 from image_processor import ImageProcessor
 from health_report import HealthReporter
+from engagement_tracker import EngagementTracker
 
 # Optional NSFW detector
 try:
@@ -45,6 +46,15 @@ class ImageAutomation:
         self.fb_compliance = FacebookPolicyCompliance() if NSFW_AVAILABLE else None
         # Health reporter (logs every run, generates STATUS.md)
         self.health = HealthReporter()
+        # Engagement tracker (fetches likes/comments/shares from FB Graph API)
+        try:
+            self.engagement = EngagementTracker(
+                page_id=os.getenv('FACEBOOK_PAGE_ID', ''),
+                access_token=os.getenv('FACEBOOK_ACCESS_TOKEN', ''),
+            )
+        except Exception as e:
+            print(f"Engagement tracker init failed (non-fatal): {e}")
+            self.engagement = None
         
         # Configuration
         self.min_interval = int(os.getenv('MIN_POST_INTERVAL_HOURS', '4') or '4')
@@ -426,16 +436,27 @@ class ImageAutomation:
         if 'error' not in result:
             print("✅ Post successful!")
             try:
+                # Get token expiry info for STATUS.md
+                token_info = self.facebook.check_token_expiry()
                 self.health.log_run('success', {
                     'title': ai_content.get('title', 'unknown'),
                     'source': images[0].get('source', 'unknown'),
                     'image_size': f"{images[0].get('width', 0)}x{images[0].get('height', 0)}",
                     'post_id': result.get('post_id') or result.get('id', 'unknown'),
                     'identifier': images[0].get('identifier', ''),
+                    'token_days_remaining': token_info.get('days_remaining'),
                 })
                 self.health.generate_status_md()
             except Exception as e:
                 print(f"Health log error: {e}")
+            
+            # Update engagement metrics for past posts (run every cycle)
+            try:
+                if self.engagement:
+                    print("\n📊 Fetching engagement for past posts...")
+                    self.engagement.update_engagement_log()
+            except Exception as e:
+                print(f"Engagement update failed (non-fatal): {e}")
         else:
             print("❌ Post failed - but image is marked as attempted to prevent retry loop")
             try:

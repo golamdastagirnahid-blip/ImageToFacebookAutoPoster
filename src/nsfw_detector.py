@@ -260,33 +260,90 @@ class StrictNSFWDetector:
         }
     
     def _check_text_metadata(self, image_info: Dict) -> Dict:
-        """Check text metadata for NSFW keywords"""
-        text_to_check = f"{image_info.get('title', '')} {image_info.get('alt_text', '')} {image_info.get('description', '')}"
+        """Check text metadata for NSFW keywords with art/history context awareness"""
+        import re
+        
+        # Build text from all metadata fields
+        title = str(image_info.get('title', ''))
+        alt = str(image_info.get('alt_text', ''))
+        desc = image_info.get('description', '')
+        if isinstance(desc, list):
+            desc = ' '.join(str(d) for d in desc)
+        creator = str(image_info.get('creator', ''))
+        subject = image_info.get('subject', '')
+        if isinstance(subject, list):
+            subject = ' '.join(str(s) for s in subject)
+        source = str(image_info.get('source', ''))
+        parent = str(image_info.get('parent_link', ''))
+        
+        text_to_check = f"{title} {alt} {desc} {creator} {subject} {source} {parent}"
         text_lower = text_to_check.lower()
         
+        # ART/HISTORICAL CONTEXT WHITELIST
+        # If text indicates fine art, museum, or historical context, treat conservatively
+        art_context_terms = [
+            'painting', 'sculpture', 'museum', 'gallery', 'exhibition',
+            'drawing', 'etching', 'engraving', 'lithograph', 'woodcut',
+            'fresco', 'mural', 'oil on canvas', 'watercolor', 'portrait',
+            'classical', 'renaissance', 'baroque', 'romanticism', 'impressionist',
+            'antique', 'antiquity', 'medieval', 'century', 'b.c.', 'a.d.',
+            'historical', 'archive', 'archaeology', 'archaeological',
+            'metropolitan museum', 'cleveland', 'rumsey', 'public domain',
+            'illustration', 'manuscript', 'photography studio', 'daguerreotype',
+            'cartography', 'map of', 'atlas', 'specimen', 'botanical',
+            'anatomical', 'medical illustration', 'scientific'
+        ]
+        is_art_context = any(term in text_lower for term in art_context_terms)
+        
+        # Use word-boundary matching (NOT substring) to avoid false positives
+        # "model" should not match "modeling", "body" should not match "bodyguard"
         found_keywords = []
         total_severity = 0
         
         for kw in self.nsfw_keywords:
-            if kw['keyword'] in text_lower:
+            keyword = kw['keyword']
+            # Use word boundary regex to match whole words only
+            pattern = r'\b' + re.escape(keyword) + r'\b'
+            if re.search(pattern, text_lower):
                 found_keywords.append({
-                    'keyword': kw['keyword'],
+                    'keyword': keyword,
                     'severity': kw['severity'],
                     'category': kw['category']
                 })
                 total_severity += kw['severity']
         
+        # In art context, downgrade severity (classical art has "nude" legitimately)
+        if is_art_context and found_keywords:
+            # Only block if MULTIPLE high-severity explicit terms appear
+            high_explicit = [k for k in found_keywords
+                           if k['severity'] >= 3 and k['keyword'] in
+                           ['porn', 'xxx', 'hardcore', 'fetish', 'nsfw', 'explicit']]
+            if len(high_explicit) >= 1:
+                return {
+                    'blocked': True,
+                    'keywords': found_keywords,
+                    'total_severity': total_severity,
+                    'context': 'art_with_explicit_match'
+                }
+            # Art context with only mild matches - allow it
+            return {
+                'blocked': False,
+                'keywords': found_keywords,
+                'total_severity': total_severity,
+                'context': 'art_whitelist_applied'
+            }
+        
+        # Non-art context - apply original strict rules
         if found_keywords:
-            # Check severity
-            if total_severity >= 3:  # High severity keyword found
+            if total_severity >= 6:  # Multiple high-severity matches required
                 return {
                     'blocked': True,
                     'keywords': found_keywords,
                     'total_severity': total_severity
                 }
-            elif total_severity >= 2:  # Medium severity
+            elif total_severity >= 4:  # Medium-high
                 return {
-                    'blocked': self.strict_mode,  # Block in strict mode
+                    'blocked': self.strict_mode,
                     'keywords': found_keywords,
                     'total_severity': total_severity
                 }

@@ -194,6 +194,10 @@ class ImageAutomation:
                 nsfw_result = self.nsfw_detector.detect_nsfw(nsfw_info)
                 if nsfw_result.get('blocked') or nsfw_result.get('overall_level') in ('high_risk', 'blocked'):
                     print(f"⛔ NSFW content detected - blocking post: {nsfw_result.get('reason', 'unknown')}")
+                    # Log what triggered the block for debugging
+                    text_check = nsfw_result.get('checks', {}).get('text', {})
+                    if text_check.get('keywords'):
+                        print(f"   Triggered keywords: {text_check['keywords']}")
                     for p in downloaded_paths:
                         try:
                             os.remove(p)

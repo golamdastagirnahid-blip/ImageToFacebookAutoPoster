@@ -1,6 +1,6 @@
 # 🤖 Auto-Poster Status
 
-_Last updated: 2026-05-08 23:42:37 UTC_
+_Last updated: 2026-05-09 04:35:04 UTC_
 
 ## 🟢 **HEALTHY**
 
@@ -8,12 +8,12 @@ _Last updated: 2026-05-08 23:42:37 UTC_
 
 ## 📊 Statistics
 
-- **Total runs tracked:** 9
-- **Successes:** 9 (100.0%)
+- **Total runs tracked:** 10
+- **Successes:** 10 (100.0%)
 - **Failures:** 0
 - **Skipped:** 0
 - **Consecutive failures:** 0
-- **Posts in last 24h:** 9
+- **Posts in last 24h:** 10
 
 ## 🔐 Facebook Token
 
@@ -21,23 +21,24 @@ _Last updated: 2026-05-08 23:42:37 UTC_
 
 ## ✅ Last Successful Post
 
-- **Time:** 2026-05-08T23:42:37.863827Z
-- **Title:** Uncovering WWII Secrets
+- **Time:** 2026-05-09T04:35:04.977202Z
+- **Title:** Uncover the Charm of 1930s Virginia
 - **Source:** David Rumsey Map Collection
-- **Image size:** 1536x1078
-- **Post ID:** 1104960692700888_122095320291317603
+- **Image size:** 1536x1135
+- **Post ID:** 1104960692700888_122095423011317603
 - **AI model:** unknown
 
 ## 📚 Source Distribution
 
-- **David Rumsey Map Collection:** 5 posts (55.6%)
-- **Cleveland Museum of Art:** 3 posts (33.3%)
-- **Metropolitan Museum of Art:** 1 posts (11.1%)
+- **David Rumsey Map Collection:** 6 posts (60.0%)
+- **Cleveland Museum of Art:** 3 posts (30.0%)
+- **Metropolitan Museum of Art:** 1 posts (10.0%)
 
 ## 📜 Recent Runs (last 10)
 
 | Time | Status | Source | Title |
 |------|--------|--------|-------|
+| 2026-05-09 04:35:04 | ✅ | David Rumsey Map Col | Uncover the Charm of 1930s Virginia |
 | 2026-05-08 23:42:37 | ✅ | David Rumsey Map Col | Uncovering WWII Secrets |
 | 2026-05-08 20:17:06 | ✅ | Metropolitan Museum  | Unveiling the Hidden Gems of the Columbi |
 | 2026-05-08 17:57:30 | ✅ | Cleveland Museum of  | Unveiling Jacques-Louis David's "Cupid a |

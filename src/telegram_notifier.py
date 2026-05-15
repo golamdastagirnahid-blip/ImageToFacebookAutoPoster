@@ -47,25 +47,56 @@ class TelegramNotifier:
     def send_text(self, text: str, parse_mode: str = "HTML", silent: bool = False) -> bool:
         if not self.enabled:
             return False
+        # Telegram limit is 4096 chars
+        chunks = [text[i:i + 3900] for i in range(0, len(text), 3900)] or [text]
+        for chunk in chunks:
+            ok = self._post_message(chunk, parse_mode, silent)
+            if not ok and parse_mode:
+                # Retry without HTML parsing in case of entity parse error
+                print("   Retrying Telegram message without HTML parse_mode...")
+                # Strip tags for plain-text fallback
+                import re
+                plain = re.sub(r'<[^>]+>', '', chunk)
+                plain = plain.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+                ok = self._post_message(plain, None, silent)
+            if not ok:
+                return False
+        return True
+
+    def _post_message(self, text: str, parse_mode, silent: bool) -> bool:
         try:
-            # Telegram limit is 4096 chars
-            chunks = [text[i:i + 3900] for i in range(0, len(text), 3900)] or [text]
-            for chunk in chunks:
-                r = requests.post(
-                    self._api("sendMessage"),
-                    data={
-                        'chat_id': self.chat_id,
-                        'text': chunk,
-                        'parse_mode': parse_mode,
-                        'disable_web_page_preview': False,
-                        'disable_notification': silent,
-                    },
-                    timeout=15,
-                )
-                r.raise_for_status()
+            data = {
+                'chat_id': self.chat_id,
+                'text': text,
+                'disable_web_page_preview': False,
+                'disable_notification': silent,
+            }
+            if parse_mode:
+                data['parse_mode'] = parse_mode
+            r = requests.post(self._api("sendMessage"), data=data, timeout=15)
+            if not r.ok:
+                # Surface the real Telegram error so the user can diagnose
+                try:
+                    body = r.json()
+                    desc = body.get('description', r.text[:200])
+                except Exception:
+                    desc = r.text[:200]
+                print(f"Telegram API {r.status_code}: {desc}")
+                # Print actionable hints for common errors
+                low = (desc or '').lower()
+                if 'chat not found' in low:
+                    print("   👉 FIX: TELEGRAM_CHAT_ID is wrong, OR you haven't sent /start to your bot yet.")
+                    print("      Open Telegram, find your bot, send /start, then re-run.")
+                elif 'bot was blocked' in low:
+                    print("   👉 FIX: You blocked the bot. Unblock it in Telegram.")
+                elif 'unauthorized' in low or r.status_code == 401:
+                    print("   👉 FIX: TELEGRAM_BOT_TOKEN is wrong. Recreate via @BotFather.")
+                elif 'parse entities' in low or "can't parse" in low:
+                    print("   👉 Will retry as plain text (HTML formatting issue).")
+                return False
             return True
         except Exception as e:
-            print(f"Telegram send_text failed: {e}")
+            print(f"Telegram send_text exception: {e}")
             return False
 
     def send_photo(self, image_path: str, caption: str) -> bool:

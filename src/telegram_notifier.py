@@ -102,25 +102,47 @@ class TelegramNotifier:
     def send_photo(self, image_path: str, caption: str) -> bool:
         if not self.enabled or not image_path or not os.path.exists(image_path):
             return False
-        try:
-            if len(caption) > 1020:
-                caption = caption[:1020] + '...'
-            with open(image_path, 'rb') as f:
-                r = requests.post(
-                    self._api("sendPhoto"),
-                    data={
-                        'chat_id': self.chat_id,
-                        'caption': caption,
-                        'parse_mode': 'HTML',
-                    },
-                    files={'photo': f},
-                    timeout=30,
-                )
-                r.raise_for_status()
-            return True
-        except Exception as e:
-            print(f"Telegram send_photo failed: {e}")
-            return False
+        if len(caption) > 1020:
+            caption = caption[:1020] + '...'
+        # Try with HTML, fall back to plain text on parse errors
+        for parse_mode in ('HTML', None):
+            try:
+                payload = {'chat_id': self.chat_id, 'caption': caption}
+                if parse_mode:
+                    payload['parse_mode'] = parse_mode
+                with open(image_path, 'rb') as f:
+                    r = requests.post(
+                        self._api("sendPhoto"),
+                        data=payload,
+                        files={'photo': f},
+                        timeout=30,
+                    )
+                if r.ok:
+                    return True
+                # Log real error
+                try:
+                    desc = r.json().get('description', r.text[:200])
+                except Exception:
+                    desc = r.text[:200]
+                print(f"Telegram sendPhoto {r.status_code}: {desc}")
+                low = (desc or '').lower()
+                if 'chat not found' in low:
+                    print("   👉 FIX: TELEGRAM_CHAT_ID is wrong, OR /start not sent to bot.")
+                    return False
+                if 'unauthorized' in low:
+                    print("   👉 FIX: TELEGRAM_BOT_TOKEN is wrong.")
+                    return False
+                if "can't parse" in low or 'parse entities' in low:
+                    # Strip HTML and retry as plain text
+                    import re
+                    caption = re.sub(r'<[^>]+>', '', caption)
+                    caption = caption.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+                    continue  # retry with parse_mode=None
+                return False
+            except Exception as e:
+                print(f"Telegram send_photo exception: {e}")
+                return False
+        return False
 
     # ------------------------------------------------------------------ #
     # Session event buffering (collects events during a cycle)
@@ -251,7 +273,8 @@ class TelegramNotifier:
     def send_token_warning(self, days_remaining: float) -> bool:
         if not self.enabled:
             return False
-        if days_remaining >= 14:
+        # Negative = long-lived token (never expires) -> no warning
+        if days_remaining < 0 or days_remaining >= 14:
             return False
         if days_remaining < 3:
             urgency = "🚨🚨 CRITICAL"

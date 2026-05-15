@@ -178,14 +178,13 @@ class ImageProcessor:
                              subheadline: str = "", source_name: str = "",
                              output_path: str = None) -> str:
         """
-        Compose a Facebook-optimal poster:
-        - Top ~30%: textured off-white banner with bold headline on YELLOW highlight
-        - Below: subheadline in dark gray (no highlight)
-        - Bottom ~70%: the actual image
-        - Right edge: vertical source/date text
-        - Bottom-left: brand name
-        
-        Output: 1080x1350 portrait JPEG (Facebook-optimal)
+        Compose a Facebook-optimal magazine-style poster:
+        - Top 70px:  Dark navy brand strip (brand name in gold)
+        - Next 360px: Textured paper banner with YELLOW-highlighted headline + subheadline
+        - Next 50px: Light strip with source + date (NOT on image)
+        - Bottom 870px: The photograph - 100% CLEAN (no overlays)
+
+        Output: 1080x1350 portrait JPEG (Facebook-optimal aspect ratio)
         """
         try:
             CANVAS_W, CANVAS_H = 1080, 1350
@@ -427,4 +426,4 @@ class ImageProcessor:
             draw.text((margin, y), left_text, font=font, fill=color)
             draw.text((canvas_w - margin - rw, y), right_text, font=font, fill=color)
         except Exception as e:
-            print(f"   Vertical source draw error: {e}")
+            print(f"   Credit strip draw error: {e}")

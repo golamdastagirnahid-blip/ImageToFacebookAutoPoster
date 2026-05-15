@@ -543,9 +543,9 @@ class ImageAutomation:
                         'identifier': images[0].get('identifier', ''),
                     },
                 )
-                # Token warning if expiring soon
+                # Token warning if expiring soon (days < 0 = long-lived, skip)
                 days_left = token_info.get('days_remaining')
-                if days_left is not None and 0 < days_left < 14:
+                if days_left is not None and 0 <= days_left < 14:
                     self.telegram.send_token_warning(days_left)
             except Exception as e:
                 print(f"Telegram notify failed (non-fatal): {e}")
@@ -679,7 +679,8 @@ def main():
             try:
                 tok = automation.facebook.check_token_expiry()
                 days = tok.get('days_remaining')
-                if days is not None and days < 14:
+                # days < 0 means long-lived (never expires) - skip warning
+                if days is not None and 0 <= days < 14:
                     automation.telegram.send_token_warning(days)
             except Exception:
                 pass
